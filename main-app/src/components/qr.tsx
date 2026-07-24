@@ -127,10 +127,8 @@ function BadgeQrDialog({ open, onClose }: { open: boolean; onClose: () => void }
     const result = await handleQrScan(token);
     switch (result.mode) {
       case "contact":
-        setScanResult({
-          message: `Saved ${result.contact.name}${result.contact.company ? ` (${result.contact.company})` : ""} to your contacts.`,
-          isError: false,
-        });
+        onClose();
+        router.push("/contacts");
         return;
       case "self":
         setScanResult({ message: "That's your own badge.", isError: false });

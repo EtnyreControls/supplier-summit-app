@@ -16,6 +16,7 @@ type ContactRow = {
   company: string | null;
   email: string | null;
   phone: string | null;
+  saved_at: string;
 };
 
 export default async function ContactsPage() {
@@ -23,7 +24,7 @@ export default async function ContactsPage() {
 
   const { data } = await supabase
     .from("contacts")
-    .select("contact_user_id, first_name, last_name, company, email, phone")
+    .select("contact_user_id, first_name, last_name, company, email, phone, saved_at")
     .order("saved_at", { ascending: false })
     .returns<ContactRow[]>();
 
@@ -33,6 +34,7 @@ export default async function ContactsPage() {
     company: row.company,
     email: row.email,
     phone: row.phone,
+    savedAt: row.saved_at,
   }));
 
   return <ContactsPageClient initialContacts={contacts} />;

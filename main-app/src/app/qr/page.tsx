@@ -44,6 +44,7 @@ export default function QrLandingPage() {
           setMessage(
             `Saved ${result.contact.name}${result.contact.company ? ` (${result.contact.company})` : ""} to your contacts.`,
           );
+          router.push("/contacts");
           return;
         case "error":
           setStatus("error");

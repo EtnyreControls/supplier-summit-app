@@ -52,6 +52,10 @@ export function ContactsPageClient({ initialContacts }: { initialContacts: Saved
       <PageContainer>
         <SectionHeader eyebrow={`${contacts.length} saved`} title="Saved contacts" />
 
+        {contacts.length > 0 && (
+          <p className="-mt-2 mb-3 text-[13px] text-grey-500">Tap a contact to expand its full details.</p>
+        )}
+
         {contacts.length === 0 ? (
           <EmptyState
             icon={<PeopleAltRoundedIcon sx={{ fontSize: 32 }} />}
