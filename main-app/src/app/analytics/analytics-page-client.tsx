@@ -57,12 +57,12 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactElement }[] =
 ];
 
 const INITIAL_FEEDBACK: AddressableItem[] = [
-  { id: "f1", text: "Breakout rooms ran long — Q&A got cut short twice.", votes: 17, groupCount: 4, addressed: false, addressedAt: null },
-  { id: "f2", text: "Would love more hands-on demo time next year vs. slides.", votes: 13, groupCount: 3, addressed: false, addressedAt: null },
-  { id: "f3", text: "Wifi in Breakout Room B was unreliable during the session.", votes: 10, addressed: false, addressedAt: null },
-  { id: "f4", text: "Lunch line took 40+ minutes — consider a second station.", votes: 9, groupCount: 2, addressed: false, addressedAt: null },
-  { id: "f5", text: "Loved the logistics breakout — more like this please.", votes: 7, addressed: false, addressedAt: null },
-  { id: "f6", text: "Badge printer at check-in jammed twice this morning.", votes: 4, addressed: true, addressedAt: 1 },
+  { id: "f1", text: "Breakout rooms ran long — Q&A got cut short twice.", count: 17, groupCount: 4, addressed: false, addressedAt: null },
+  { id: "f2", text: "Would love more hands-on demo time next year vs. slides.", count: 13, groupCount: 3, addressed: false, addressedAt: null },
+  { id: "f3", text: "Wifi in Breakout Room B was unreliable during the session.", count: 10, addressed: false, addressedAt: null },
+  { id: "f4", text: "Lunch line took 40+ minutes — consider a second station.", count: 9, groupCount: 2, addressed: false, addressedAt: null },
+  { id: "f5", text: "Loved the logistics breakout — more like this please.", count: 7, addressed: false, addressedAt: null },
+  { id: "f6", text: "Badge printer at check-in jammed twice this morning.", count: 4, addressed: true, addressedAt: 1 },
 ];
 
 const VOTE_TOPICS: VoteEntry[] = [
@@ -272,7 +272,7 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
             {section === "feedback" && (
               <>
                 <SectionHeader eyebrow={`${feedbackOpen} open`} title="Session feedback" />
-                <AddressableList items={feedback} onToggle={toggleFeedback} votesLabel="flags" />
+                <AddressableList items={feedback} onToggle={toggleFeedback} countLabel="flags" />
 
                 <SectionHeader eyebrow="Auto-clustered" title="Feedback Topics" />
                 <FeedbackTopics showToast={showToast} />
