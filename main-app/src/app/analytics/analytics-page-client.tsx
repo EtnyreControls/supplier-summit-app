@@ -27,6 +27,7 @@ import {
   type VoteEntry,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
+import { toggleQuestionGroupChecked } from "@/lib/supabase/toggle-question-group";
 
 /**
  * Route: /analytics ("Analytics" in TopNav, role="analytics" only —
@@ -37,7 +38,8 @@ import { useSignOut } from "@/lib/supabase/use-sign-out";
  * built from the same in-memory state, so resolving items elsewhere updates
  * it live.
  *
- * TODO: swap all mock data below for real Supabase queries once wired up.
+ * Questions are real data (question_groups, fetched in page.tsx); Feedback/
+ * Voting/Polls are still mock — TODO: swap those for real queries too.
  */
 
 type SectionKey = "questions" | "feedback" | "voting" | "polls" | "dashboard";
@@ -48,16 +50,6 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactElement }[] =
   { key: "voting", label: "Voting", icon: <HowToVoteRoundedIcon fontSize="small" /> },
   { key: "polls", label: "Polls", icon: <PollRoundedIcon fontSize="small" /> },
   { key: "dashboard", label: "Dashboard", icon: <InsightsRoundedIcon fontSize="small" /> },
-];
-
-const INITIAL_QUESTIONS: AddressableItem[] = [
-  { id: "q1", text: "Will the new supplier portal support bulk PO uploads at launch?", votes: 24, groupCount: 5, addressed: false, addressedAt: null },
-  { id: "q2", text: "What's the timeline for rolling out the updated quality-gate checklist?", votes: 19, groupCount: 3, addressed: false, addressedAt: null },
-  { id: "q3", text: "Can freight consolidation be opted into per-region instead of company-wide?", votes: 14, groupCount: 2, addressed: false, addressedAt: null },
-  { id: "q4", text: "Who do we contact for onboarding questions after today?", votes: 11, addressed: false, addressedAt: null },
-  { id: "q5", text: "Is there a sandbox environment for testing the new EDI spec?", votes: 8, groupCount: 2, addressed: false, addressedAt: null },
-  { id: "q6", text: "Will pricing tiers change for the 2027 fiscal year?", votes: 6, addressed: false, addressedAt: null },
-  { id: "q7", text: "Can we get the slide deck from the keynote afterward?", votes: 5, addressed: true, addressedAt: 1 },
 ];
 
 const INITIAL_FEEDBACK: AddressableItem[] = [
@@ -130,22 +122,31 @@ function addressedRate(items: AddressableItem[]) {
   return (items.filter((i) => i.addressed).length / items.length) * 100;
 }
 
-export function AnalyticsPageClient() {
+export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: AddressableItem[] }) {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const [section, setSection] = React.useState<SectionKey>("questions");
-  const [questions, setQuestions] = React.useState(INITIAL_QUESTIONS);
+  const [questions, setQuestions] = React.useState(initialQuestions);
   const [feedback, setFeedback] = React.useState(INITIAL_FEEDBACK);
   const clockRef = React.useRef(10);
 
-  const toggleQuestion = (id: string) =>
+  const toggleQuestion = async (id: string) => {
+    const current = questions.find((q) => q.id === id);
+    if (!current) return;
+    const nextAddressed = !current.addressed;
+
     setQuestions((prev) =>
-      prev.map((q) =>
-        q.id === id ? { ...q, addressed: !q.addressed, addressedAt: q.addressed ? null : clockRef.current++ } : q
-      )
+      prev.map((q) => (q.id === id ? { ...q, addressed: nextAddressed, addressedAt: nextAddressed ? Date.now() : null } : q))
     );
+
+    const { error } = await toggleQuestionGroupChecked(id, nextAddressed);
+    if (error) {
+      setQuestions((prev) => prev.map((q) => (q.id === id ? current : q)));
+      showToast(error, "error");
+    }
+  };
   const toggleFeedback = (id: string) =>
     setFeedback((prev) =>
       prev.map((f) =>
