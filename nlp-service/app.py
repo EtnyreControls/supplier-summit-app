@@ -40,9 +40,38 @@ TOPIC_ITEMS_TABLE = "feedback_topic_items"
 # since there's no real row to link to.
 FeedbackItem = tuple[Optional[str], str]
 
+# HDBSCAN requires enough densely-packed items to form a cluster at all, so
+# small batches (an event with only a handful of feedback items) always came
+# back as noise. A distance threshold merges items greedily up to a cosine-
+# distance cutoff instead, which works the same way at any batch size —
+# including N=1 or N=2 — with no minimum-density requirement.
+DISTANCE_THRESHOLD = 0.3
+
+QUESTION_GROUPS_TABLE = "question_groups"
+QUESTIONS_TABLE = "questions"
+# Questions need a model tuned for query/question *intent* matching (trained
+# on question-answer pairs) rather than general sentence similarity — two
+# attendees can phrase the same question totally differently ("will there be
+# a recording?" vs "can I watch this later?"), which a surface-wording model
+# like EMBEDDING_MODEL_NAME would miss. This happens to name the same
+# underlying model as Feedback's today, but it's kept as its own constant
+# and its own loader (get_questions_embedding_model) so the two pipelines
+# stay independently swappable and never get consolidated into one.
+QUESTIONS_EMBEDDING_MODEL = "sentence-transformers/multi-qa-mpnet-base-dot-v1"
+# Grouping Questions is near-duplicate detection ("is this the same question
+# as that one"), not thematic clustering — so clustering algorithms are the
+# wrong primitive: HDBSCAN needs several densely-packed items to form a
+# cluster at all, and Agglomerative needs a distance threshold guessed in
+# advance. Connected components over a similarity graph has neither
+# limitation — it works the same way at any batch size, including N=1 or
+# N=2, since every question starts as its own singleton component and only
+# merges when it's actually similar enough to another one.
+QUESTION_SIMILARITY_THRESHOLD = 0.75
+
 app = FastAPI(title="Supplier Summit NLP Service")
 
 _embedding_model = None
+_questions_embedding_model = None
 _summarizer = None
 
 
@@ -60,6 +89,19 @@ class TopicsResponse(BaseModel):
     topics: list[Topic]
 
 
+class QuestionGroup(BaseModel):
+    group_id: str
+    composed_question: str
+    item_count: int
+    questions: list[str]
+
+
+class QuestionGroupsResponse(BaseModel):
+    status: str
+    regrouped_at: str
+    groups: list[QuestionGroup]
+
+
 def get_supabase() -> Optional[Client]:
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_KEY")
@@ -75,6 +117,15 @@ def get_embedding_model():
 
         _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
     return _embedding_model
+
+
+def get_questions_embedding_model():
+    global _questions_embedding_model
+    if _questions_embedding_model is None:
+        from sentence_transformers import SentenceTransformer
+
+        _questions_embedding_model = SentenceTransformer(QUESTIONS_EMBEDDING_MODEL)
+    return _questions_embedding_model
 
 
 def get_summarizer():
@@ -120,7 +171,7 @@ def load_feedback(supabase: Optional[Client]) -> list[FeedbackItem]:
 
 def build_topic_model(n_docs: int):
     from bertopic import BERTopic
-    from hdbscan import HDBSCAN
+    from sklearn.cluster import AgglomerativeClustering
     from umap import UMAP
 
     # BERTopic's defaults (min_topic_size=10, UMAP n_neighbors=15) assume a
@@ -137,17 +188,23 @@ def build_topic_model(n_docs: int):
         metric="cosine",
         random_state=42,
     )
-    hdbscan_model = HDBSCAN(
-        min_cluster_size=min_topic_size,
-        metric="euclidean",
-        cluster_selection_method="eom",
-        prediction_data=True,
+    # BERTopic accepts any clustering model exposing .fit()/.labels_ via the
+    # hdbscan_model param, despite the name — see DISTANCE_THRESHOLD above
+    # for why agglomerative clustering replaced HDBSCAN here. Items whose
+    # nearest merge exceeds DISTANCE_THRESHOLD are left as their own
+    # singleton cluster rather than forced into an unrelated one — the
+    # default behavior once distance_threshold is set with n_clusters=None.
+    clustering_model = AgglomerativeClustering(
+        n_clusters=None,
+        metric="cosine",
+        linkage="average",
+        distance_threshold=DISTANCE_THRESHOLD,
     )
 
     return BERTopic(
         embedding_model=get_embedding_model(),
         umap_model=umap_model,
-        hdbscan_model=hdbscan_model,
+        hdbscan_model=clustering_model,
         min_topic_size=min_topic_size,
         calculate_probabilities=False,
         verbose=False,
@@ -292,6 +349,158 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def group_questions(texts: list[str]) -> list[int]:
+    """Assigns each text a group label via cosine similarity + connected components.
+
+    Grouping questions is near-duplicate detection ("did two attendees ask
+    the same thing"), not thematic clustering, so a similarity graph is the
+    right model: any two texts more similar than QUESTION_SIMILARITY_THRESHOLD
+    are connected, and each connected component becomes one group. Unlike
+    HDBSCAN/Agglomerative clustering, this needs no minimum cluster size and
+    no distance threshold guessed from corpus size — it works identically
+    whether there are 2 questions or 200, and a question with no match simply
+    ends up in a component by itself.
+    """
+    if len(texts) < 2:
+        return list(range(len(texts)))
+
+    import numpy as np
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    model = get_questions_embedding_model()
+    embeddings = model.encode(texts, normalize_embeddings=True)
+
+    # Embeddings are L2-normalized, so their dot product is cosine similarity.
+    similarity = embeddings @ embeddings.T
+    adjacency = similarity > QUESTION_SIMILARITY_THRESHOLD
+    np.fill_diagonal(adjacency, False)
+
+    _, labels = connected_components(csr_matrix(adjacency), directed=False)
+    return labels.tolist()
+
+
+def _pending_question_groups(supabase: Client) -> list[dict[str, Any]]:
+    """question_groups still open for regrouping: not yet answered or triaged.
+
+    Anything a speaker has already answered or analytics has already checked
+    off is left alone — retroactively merging answered questions raises
+    "whose answer wins" questions this pipeline doesn't try to solve.
+    """
+    resp = (
+        supabase.table(QUESTION_GROUPS_TABLE)
+        .select("group_id, composed_question, topic, created_at, questions(question_id, submission_info, topic)")
+        .eq("status", "pending")
+        .eq("checked", False)
+        .order("created_at")
+        .execute()
+    )
+    return resp.data or []
+
+
+def _question_group_summaries(group_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summaries = []
+    for row in group_rows:
+        questions = row.get("questions") or []
+        texts = [q.get("submission_info") or q.get("topic") or "" for q in questions]
+        summaries.append(
+            {
+                "group_id": row["group_id"],
+                "composed_question": row.get("composed_question") or (texts[0] if texts else ""),
+                "item_count": len(questions),
+                "questions": texts,
+            }
+        )
+    return summaries
+
+
+def run_questions_pipeline(supabase: Optional[Client]) -> list[dict[str, Any]]:
+    if supabase is None:
+        return []
+
+    try:
+        group_rows = _pending_question_groups(supabase)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[nlp-service] Failed to read question_groups for regrouping: {exc}", file=sys.stderr)
+        return []
+
+    # One row per question, in group-creation order — ordering by created_at
+    # above means the first group encountered for a given component is
+    # always its oldest, which is what makes it the merge survivor below.
+    flat: list[dict[str, Any]] = []
+    for row in group_rows:
+        for question in row.get("questions") or []:
+            text = (
+                question.get("submission_info")
+                or question.get("topic")
+                or row.get("composed_question")
+                or row.get("topic")
+                or ""
+            )
+            flat.append(
+                {
+                    "question_id": question["question_id"],
+                    "group_id": row["group_id"],
+                    "text": text.strip(),
+                }
+            )
+
+    if len(flat) >= 2:
+        labels = group_questions([item["text"] for item in flat])
+
+        components: dict[int, list[dict[str, Any]]] = {}
+        for item, label in zip(flat, labels):
+            components.setdefault(label, []).append(item)
+
+        candidate_losers: set[str] = set()
+
+        for members in components.values():
+            group_ids = list(dict.fromkeys(m["group_id"] for m in members))
+            if len(group_ids) < 2:
+                continue  # every member is already in the same group
+
+            survivor_id = group_ids[0]
+            to_move = [m["question_id"] for m in members if m["group_id"] != survivor_id]
+            composed_question = max((m["text"] for m in members), key=len)
+
+            try:
+                supabase.table(QUESTIONS_TABLE).update({"group_id": survivor_id}).in_(
+                    "question_id", to_move
+                ).execute()
+                supabase.table(QUESTION_GROUPS_TABLE).update(
+                    {"composed_question": composed_question}
+                ).eq("group_id", survivor_id).execute()
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"[nlp-service] Failed to merge question groups {group_ids[1:]} into {survivor_id}: {exc}",
+                    file=sys.stderr,
+                )
+                continue
+
+            candidate_losers.update(group_ids[1:])
+
+        # Only delete a losing group once nothing references it anymore —
+        # question_groups has no ON DELETE SET NULL, so deleting one that
+        # still has a question attached would cascade-delete that question.
+        for loser_id in candidate_losers:
+            try:
+                remaining = (
+                    supabase.table(QUESTIONS_TABLE).select("question_id").eq("group_id", loser_id).limit(1).execute()
+                )
+                if not (remaining.data or []):
+                    supabase.table(QUESTION_GROUPS_TABLE).delete().eq("group_id", loser_id).execute()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[nlp-service] Failed to clean up question group {loser_id}: {exc}", file=sys.stderr)
+
+    try:
+        group_rows = _pending_question_groups(supabase)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[nlp-service] Failed to re-read question_groups after regrouping: {exc}", file=sys.stderr)
+        return []
+
+    return _question_group_summaries(group_rows)
+
+
 @app.get("/api/feedback/topics", response_model=TopicsResponse)
 def get_topics() -> TopicsResponse:
     return fetch_latest_topics(get_supabase())
@@ -304,6 +513,13 @@ def refresh_topics() -> TopicsResponse:
     save_run(supabase, now_iso(), topics)
     # Re-read rather than trust in-memory data — confirms what actually landed.
     return fetch_latest_topics(supabase)
+
+
+@app.post("/api/questions/groups/refresh", response_model=QuestionGroupsResponse)
+def refresh_question_groups() -> QuestionGroupsResponse:
+    supabase = get_supabase()
+    groups = run_questions_pipeline(supabase)
+    return QuestionGroupsResponse(status="ok", regrouped_at=now_iso(), groups=groups)
 
 
 if __name__ == "__main__":

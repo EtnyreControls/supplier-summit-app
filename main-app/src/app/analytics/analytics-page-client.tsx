@@ -1,12 +1,16 @@
 "use client";
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import QuestionAnswerRoundedIcon from "@mui/icons-material/QuestionAnswerRounded";
 import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
 import HowToVoteRoundedIcon from "@mui/icons-material/HowToVoteRounded";
 import PollRoundedIcon from "@mui/icons-material/PollRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import {
   PageContainer,
   SectionHeader,
@@ -123,6 +127,7 @@ function addressedRate(items: AddressableItem[]) {
 }
 
 export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: AddressableItem[] }) {
+  const router = useRouter();
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
@@ -130,7 +135,29 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
   const [section, setSection] = React.useState<SectionKey>("questions");
   const [questions, setQuestions] = React.useState(initialQuestions);
   const [feedback, setFeedback] = React.useState(INITIAL_FEEDBACK);
+  const [regrouping, setRegrouping] = React.useState(false);
   const clockRef = React.useRef(10);
+
+  // Regrouping (merging near-duplicate questions) changes which ids exist,
+  // so it can't be applied as a local optimistic patch like toggleQuestion
+  // — this re-syncs local state whenever page.tsx's server query re-runs.
+  React.useEffect(() => {
+    setQuestions(initialQuestions);
+  }, [initialQuestions]);
+
+  const handleRegroup = async () => {
+    setRegrouping(true);
+    try {
+      const res = await fetch("/api/questions/groups/refresh", { method: "POST" });
+      if (!res.ok) throw new Error("Regroup failed");
+      router.refresh();
+      showToast("Questions regrouped");
+    } catch {
+      showToast("Couldn't regroup questions", "error");
+    } finally {
+      setRegrouping(false);
+    }
+  };
 
   const toggleQuestion = async (id: string) => {
     const current = questions.find((q) => q.id === id);
@@ -217,7 +244,27 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
           <div>
             {section === "questions" && (
               <>
-                <SectionHeader eyebrow={`${questionsOpen} open`} title="Submitted questions" />
+                <SectionHeader
+                  eyebrow={`${questionsOpen} open`}
+                  title="Submitted questions"
+                  action={
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={handleRegroup}
+                      disabled={regrouping}
+                      startIcon={
+                        regrouping ? (
+                          <CircularProgress size={14} color="inherit" />
+                        ) : (
+                          <RefreshRoundedIcon fontSize="small" />
+                        )
+                      }
+                    >
+                      {regrouping ? "Regrouping…" : "Regroup"}
+                    </Button>
+                  }
+                />
                 <AddressableList items={questions} onToggle={toggleQuestion} />
               </>
             )}
