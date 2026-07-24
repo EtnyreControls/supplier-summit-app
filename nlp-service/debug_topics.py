@@ -21,13 +21,13 @@ def main() -> None:
         print("No topics produced (no feedback data available).")
         return
 
-    for topic in topics:
-        print(f"Topic {topic['topic_id']}: {topic['label']}")
-        print(f"  item_count: {topic['item_count']}")
+    for i, topic in enumerate(topics):
+        print(f"Topic {i}: {topic['label']}")
+        print(f"  item_count: {len(topic['items'])}")
         print(f"  summary: {topic['summary']}")
         print("  examples:")
-        for item in topic["items"][:3]:
-            print(f"    - {item}")
+        for _, text in topic["items"][:3]:
+            print(f"    - {text}")
         print()
 
 

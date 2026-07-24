@@ -1,17 +1,21 @@
 """Feedback topic clustering + summarization service.
 
-Clusters supplier_feedback rows into topics with BERTopic and generates a
-plain-English summary per topic with a local BART model. Everything runs
-on-device — no paid APIs, no API keys for the ML side. Results are cached
-in Supabase (nlp_feedback_cache) so GET /api/feedback/topics is cheap and
-POST /api/feedback/topics/refresh is the only path that re-runs the pipeline.
+Clusters real supplier feedback (feedback_answers.answer_value, for
+text-type questions) into topics with BERTopic and generates a plain-English
+summary per topic with a local BART model. Everything runs on-device — no
+paid APIs, no API keys for the ML side.
+
+Results are stored normalized (feedback_topic_runs / feedback_topics /
+feedback_topic_items) rather than as one JSON blob, so a topic can drill
+down to the exact feedback_answers row it came from. GET /api/feedback/topics
+reads the latest run; POST /api/feedback/topics/refresh is the only path
+that re-runs the pipeline.
 """
 
 from __future__ import annotations
 
 import os
 import sys
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -27,9 +31,14 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 EMBEDDING_MODEL_NAME = "sentence-transformers/multi-qa-mpnet-base-dot-v1"
 SUMMARIZATION_MODEL_NAME = "facebook/bart-large-cnn"
-FEEDBACK_TABLE = "supplier_feedback"
-FEEDBACK_COLUMN = "feedback_text"
-CACHE_TABLE = "nlp_feedback_cache"
+ANSWERS_TABLE = "feedback_answers"
+RUNS_TABLE = "feedback_topic_runs"
+TOPICS_TABLE = "feedback_topics"
+TOPIC_ITEMS_TABLE = "feedback_topic_items"
+
+# (feedback_answer_id, text) — id is None for sample-data fallback items,
+# since there's no real row to link to.
+FeedbackItem = tuple[Optional[str], str]
 
 app = FastAPI(title="Supplier Summit NLP Service")
 
@@ -38,7 +47,7 @@ _summarizer = None
 
 
 class Topic(BaseModel):
-    topic_id: int
+    topic_id: str
     label: str
     item_count: int
     summary: str
@@ -77,27 +86,36 @@ def get_summarizer():
     return _summarizer
 
 
-def load_feedback(supabase: Optional[Client]) -> list[str]:
-    """Reads supplier_feedback.feedback_text; falls back to sample data.
+def load_feedback(supabase: Optional[Client]) -> list[FeedbackItem]:
+    """Reads free-text feedback answers; falls back to sample data.
 
-    Any Supabase error (missing table, no connection, etc.) is treated the
-    same as "no data" so local development works without a live DB.
+    Only feedback_questions.question_type = 'text' answers are pulled —
+    mcq/rating answers are short codes/numbers, not free text worth topic
+    modeling. Any Supabase error (missing table, no connection, etc.) is
+    treated the same as "no data" so local development works without a
+    live DB.
     """
     if supabase is not None:
         try:
-            resp = supabase.table(FEEDBACK_TABLE).select(FEEDBACK_COLUMN).execute()
+            resp = (
+                supabase.table(ANSWERS_TABLE)
+                .select("feedback_answer_id, answer_value, feedback_questions(question_type)")
+                .execute()
+            )
             rows = resp.data or []
-            texts = [
-                row[FEEDBACK_COLUMN].strip()
+            items = [
+                (row["feedback_answer_id"], row["answer_value"].strip())
                 for row in rows
-                if row.get(FEEDBACK_COLUMN) and row[FEEDBACK_COLUMN].strip()
+                if row.get("answer_value")
+                and row["answer_value"].strip()
+                and (row.get("feedback_questions") or {}).get("question_type") == "text"
             ]
-            if texts:
-                return texts
+            if items:
+                return items
         except Exception as exc:  # noqa: BLE001
             print(f"[nlp-service] Supabase feedback query failed, using sample data: {exc}", file=sys.stderr)
 
-    return list(SAMPLE_FEEDBACK)
+    return [(None, text) for text in SAMPLE_FEEDBACK]
 
 
 def build_topic_model(n_docs: int):
@@ -138,7 +156,8 @@ def build_topic_model(n_docs: int):
 
 def topic_label(bertopic_name: str) -> str:
     # BERTopic names topics like "0_wifi_signal_connection_room" — drop the
-    # leading id (redundant with the topic_id field) and title-case the rest.
+    # leading id (BERTopic's numeric id isn't stored — each run gets fresh
+    # DB rows, see feedback_topics) and title-case the rest.
     _, _, rest = bertopic_name.partition("_")
     words = [w for w in rest.split("_") if w]
     return " ".join(w.capitalize() for w in words) if words else bertopic_name
@@ -155,29 +174,29 @@ def summarize_topic(items: list[str]) -> str:
 
 
 def run_pipeline(supabase: Optional[Client]) -> list[dict[str, Any]]:
-    feedback = load_feedback(supabase)
-    if not feedback:
+    feedback_items = load_feedback(supabase)
+    if not feedback_items:
         return []
+
+    texts = [text for _, text in feedback_items]
 
     # BERTopic/UMAP need more docs than clusters to fit meaningfully — below
     # that, treat everything as a single topic rather than erroring.
-    if len(feedback) < 5:
+    if len(feedback_items) < 5:
         return [
             {
-                "topic_id": 0,
                 "label": "General feedback",
-                "item_count": len(feedback),
-                "summary": summarize_topic(feedback),
-                "items": feedback,
+                "summary": summarize_topic(texts),
+                "items": feedback_items,
             }
         ]
 
-    topic_model = build_topic_model(len(feedback))
-    topic_ids, _ = topic_model.fit_transform(feedback)
+    topic_model = build_topic_model(len(texts))
+    topic_ids, _ = topic_model.fit_transform(texts)
 
-    items_by_topic: dict[int, list[str]] = {}
-    for text, topic_id in zip(feedback, topic_ids):
-        items_by_topic.setdefault(int(topic_id), []).append(text)
+    items_by_topic: dict[int, list[FeedbackItem]] = {}
+    for item, topic_id in zip(feedback_items, topic_ids):
+        items_by_topic.setdefault(int(topic_id), []).append(item)
 
     topics: list[dict[str, Any]] = []
     for _, row in topic_model.get_topic_info().iterrows():
@@ -187,10 +206,8 @@ def run_pipeline(supabase: Optional[Client]) -> list[dict[str, Any]]:
         items = items_by_topic.get(topic_id, [])
         topics.append(
             {
-                "topic_id": topic_id,
                 "label": topic_label(row["Name"]),
-                "item_count": len(items),
-                "summary": summarize_topic(items),
+                "summary": summarize_topic([text for _, text in items]),
                 "items": items,
             }
         )
@@ -198,19 +215,77 @@ def run_pipeline(supabase: Optional[Client]) -> list[dict[str, Any]]:
     return topics
 
 
-def save_cache(supabase: Optional[Client], cached_at: str, topics: list[dict[str, Any]]) -> None:
+def save_run(supabase: Optional[Client], cached_at: str, topics: list[dict[str, Any]]) -> None:
+    """Writes a run + its topics + item rows across the three feedback_topic_* tables."""
     if supabase is None:
         return
     try:
-        supabase.table(CACHE_TABLE).insert(
-            {
-                "id": str(uuid.uuid4()),
-                "cached_at": cached_at,
-                "results": {"topics": topics},
-            }
-        ).execute()
+        run_resp = supabase.table(RUNS_TABLE).insert({"cached_at": cached_at}).execute()
+        run_id = run_resp.data[0]["run_id"]
+
+        for topic in topics:
+            items: list[FeedbackItem] = topic["items"]
+            topic_resp = (
+                supabase.table(TOPICS_TABLE)
+                .insert(
+                    {
+                        "run_id": run_id,
+                        "label": topic["label"],
+                        "summary": topic["summary"],
+                        "item_count": len(items),
+                    }
+                )
+                .execute()
+            )
+            topic_id = topic_resp.data[0]["topic_id"]
+
+            item_rows = [
+                {"topic_id": topic_id, "feedback_answer_id": answer_id, "raw_text": text}
+                for answer_id, text in items
+            ]
+            if item_rows:
+                supabase.table(TOPIC_ITEMS_TABLE).insert(item_rows).execute()
     except Exception as exc:  # noqa: BLE001
-        print(f"[nlp-service] Failed to write nlp_feedback_cache: {exc}", file=sys.stderr)
+        print(f"[nlp-service] Failed to write feedback topic tables: {exc}", file=sys.stderr)
+
+
+def fetch_latest_topics(supabase: Optional[Client]) -> TopicsResponse:
+    if supabase is None:
+        return TopicsResponse(status="not_yet_run", cached_at=None, topics=[])
+
+    try:
+        run_resp = (
+            supabase.table(RUNS_TABLE).select("run_id, cached_at").order("cached_at", desc=True).limit(1).execute()
+        )
+        runs = run_resp.data or []
+    except Exception as exc:  # noqa: BLE001
+        print(f"[nlp-service] Failed to read {RUNS_TABLE}: {exc}", file=sys.stderr)
+        runs = []
+
+    if not runs:
+        return TopicsResponse(status="not_yet_run", cached_at=None, topics=[])
+
+    run = runs[0]
+    topics_resp = (
+        supabase.table(TOPICS_TABLE)
+        .select("topic_id, label, summary, item_count, feedback_topic_items(raw_text)")
+        .eq("run_id", run["run_id"])
+        .execute()
+    )
+    topic_rows = topics_resp.data or []
+
+    topics = [
+        Topic(
+            topic_id=row["topic_id"],
+            label=row["label"],
+            item_count=row["item_count"],
+            summary=row["summary"],
+            items=[i["raw_text"] for i in (row.get("feedback_topic_items") or [])],
+        )
+        for row in topic_rows
+    ]
+
+    return TopicsResponse(status="ok", cached_at=run["cached_at"], topics=topics)
 
 
 def now_iso() -> str:
@@ -219,39 +294,16 @@ def now_iso() -> str:
 
 @app.get("/api/feedback/topics", response_model=TopicsResponse)
 def get_topics() -> TopicsResponse:
-    supabase = get_supabase()
-    if supabase is None:
-        return TopicsResponse(status="not_yet_run", cached_at=None, topics=[])
-
-    try:
-        resp = (
-            supabase.table(CACHE_TABLE)
-            .select("*")
-            .order("cached_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        rows = resp.data or []
-    except Exception as exc:  # noqa: BLE001
-        print(f"[nlp-service] Failed to read nlp_feedback_cache: {exc}", file=sys.stderr)
-        rows = []
-
-    if not rows:
-        return TopicsResponse(status="not_yet_run", cached_at=None, topics=[])
-
-    row = rows[0]
-    results = row.get("results") or {}
-    topics = results.get("topics", [])
-    return TopicsResponse(status="ok", cached_at=row.get("cached_at"), topics=topics)
+    return fetch_latest_topics(get_supabase())
 
 
 @app.post("/api/feedback/topics/refresh", response_model=TopicsResponse)
 def refresh_topics() -> TopicsResponse:
     supabase = get_supabase()
     topics = run_pipeline(supabase)
-    cached_at = now_iso()
-    save_cache(supabase, cached_at, topics)
-    return TopicsResponse(status="ok", cached_at=cached_at, topics=topics)
+    save_run(supabase, now_iso(), topics)
+    # Re-read rather than trust in-memory data — confirms what actually landed.
+    return fetch_latest_topics(supabase)
 
 
 if __name__ == "__main__":

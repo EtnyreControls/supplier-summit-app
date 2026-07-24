@@ -1,0 +1,14 @@
+INFO:     Started server process [21904]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     127.0.0.1:49758 - "GET /api/feedback/topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49762 - "GET / HTTP/1.1" 404 Not Found
+[nlp-service] Supabase feedback query failed, using sample data: {'message': "Could not find the table 'public.supplier_feedback' in the schema cache", 'code': 'PGRST205', 'hint': None, 'details': None}
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Device set to use cpu
+Asking to truncate to max_length but no maximum length is provided and the model has no predefined maximum length. Default to no truncation.
+INFO:     127.0.0.1:49773 - "POST /api/feedback/topics/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57935 - "GET /api/feedback/topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57935 - "GET /api/feedback/topics HTTP/1.1" 200 OK
