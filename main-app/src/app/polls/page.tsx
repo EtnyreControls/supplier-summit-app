@@ -14,6 +14,7 @@ import {
   FeedbackStepper,
   useToast,
   useProfileModal,
+  useBadgeQrModal,
   type PollOption,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
@@ -140,6 +141,7 @@ export default function PollsPage() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
+  const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const [scheduledVotes, setScheduledVotes] = React.useState<Record<string, string>>({});
   const [anytimeVotes, setAnytimeVotes] = React.useState<Record<string, string>>({});
   const [rating, setRating] = React.useState<string | null>(null);
@@ -160,7 +162,7 @@ export default function PollsPage() {
         activeKey="polls"
         logo={<NavLogo />}
         initials="SC"
-        onQrClick={() => showToast("Badge QR opened")}
+        onQrClick={openBadgeQr}
         onProfile={openProfile}
         onLogout={handleLogout}
       />
@@ -259,6 +261,7 @@ export default function PollsPage() {
       </PageContainer>
       {toast}
       {profileModal}
+      {badgeQrModal}
     </div>
   );
 }

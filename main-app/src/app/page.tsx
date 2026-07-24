@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
-import { PageContainer, SectionHeader, ListRow, TopNav, Banner, useToast, useProfileModal, SummitSummary, NavLogo, OnboardingTour } from "@/components";
+import { PageContainer, SectionHeader, ListRow, TopNav, Banner, useToast, useProfileModal, useBadgeQrModal, SummitSummary, NavLogo, OnboardingTour } from "@/components";
 import { EtnBanner } from "@/components/homepage/etn-banner"
 import { MissionVision } from "@/components/homepage/mission-vision";
 import { OurValues } from "@/components/homepage/values"
@@ -27,6 +27,7 @@ export default function Home() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
+  const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
 
   return (
     <div className="min-h-dvh bg-background">
@@ -34,7 +35,7 @@ export default function Home() {
         activeKey="about"
         logo={<NavLogo />}
         initials="SC"
-        onQrClick={() => showToast("Badge QR opened")}
+        onQrClick={openBadgeQr}
         onProfile={openProfile}
         onLogout={handleLogout}
       />
@@ -73,6 +74,7 @@ export default function Home() {
       </PageContainer>
       {toast}
       {profileModal}
+      {badgeQrModal}
       <OnboardingTour />
     </div>
   );
