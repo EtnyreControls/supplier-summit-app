@@ -7,6 +7,7 @@ export { PollCard, type PollOption } from "./polls";
 export { QuestionCard } from "./questions";
 export { QrBadge, ContactShareList, useBadgeQrModal, type ShareField } from "./qr";
 export { ContactsList, type SavedContact } from "./contacts";
+export { MyQuestionsList, type SubmittedQuestion } from "./my-questions";
 export { ProfileModal, useProfileModal } from "./profile-modal";
 export { Banner, EmptyState, LabeledProgress, useToast } from "./feedback";
 export { FeedbackStepper } from "./feedback-stepper";
@@ -26,6 +27,5 @@ export { GrowthMachine } from "./text"
 export { BoardOnboardingTour } from "./board-onboarding-tour"
 export { AgendaTimeline, type AgendaSession } from "./agenda/agenda-timeline";
 export { SessionDetail, type AgendaSpeaker } from "./agenda/session-detail";
-export { AdminGate, useAdminUnlocked } from "./admin/admin-gate";
 export { AddressableList, sortAddressable, type AddressableItem } from "./admin/addressable-list";
 export { VoteLeaderboard, type VoteEntry } from "./admin/vote-leaderboard";

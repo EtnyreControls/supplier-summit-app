@@ -10,6 +10,7 @@ import { RoadAheadDial } from "@/components/homepage/road-ahead-dial";
 import { BusinessUnits } from "@/components/homepage/business-units";
 import { GrowthMachine } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * Route: / (landing page)
@@ -20,14 +21,27 @@ import { useSignOut } from "@/lib/supabase/use-sign-out";
  * QR login), a live Now/Next strip, and a single redirect card into
  * Agenda & Speakers rather than a duplicated list.
  *
- * TODO: swap the static name/session data below for real session state
- * and the live Now/Next feed once Supabase Realtime is wired up.
+ * TODO: swap the static session data below for real session state and the
+ * live Now/Next feed once Supabase Realtime is wired up.
  */
 export default function Home() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
+  const [firstName, setFirstName] = React.useState("Attendee");
+
+  React.useEffect(() => {
+    const supabase = createClient();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("user").select("first_name").eq("user_id", user.id).single();
+      if (data?.first_name) setFirstName(data.first_name);
+    })();
+  }, []);
 
   return (
     <div className="min-h-dvh bg-background">
@@ -41,7 +55,7 @@ export default function Home() {
       />
       <PageContainer>
         <SummitSummary
-          name="Sarah"
+          name={firstName}
           stats={[
             { label: "Attendees", value: "480" },
             { label: "Speakers", value: "24" },

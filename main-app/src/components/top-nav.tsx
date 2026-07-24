@@ -13,8 +13,9 @@ import QrCode2Icon from "@mui/icons-material/QrCode2";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
-import LockRoundedIcon from "@mui/icons-material/LockRounded";
+import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import { ModeToggle } from "./mode-toggle";
+import { createClient } from "@/lib/supabase/client";
 
 export interface NavItem {
   key: string;
@@ -24,22 +25,23 @@ export interface NavItem {
 }
 
 /**
- * Fixed app-wide nav — the three sections defined for this project.
- * Edit here if the information architecture changes; not passed as a prop
- * so every page is guaranteed to render the same nav.
+ * Fixed app-wide nav — the three sections defined for this project, plus
+ * Analytics, which is appended at render time only for role="analytics"
+ * users (see the role fetch in TopNav below).
  */
 const NAV_ITEMS: NavItem[] = [
   { key: "about", label: "About us", href: "/#about" },
   { key: "agenda", label: "Agenda & speakers", href: "/agenda" },
   { key: "polls", label: "Polls & feedback", href: "/polls" },
   { key: "growth-machine", label: "Growth Machine", href: "/growth-machine" },
-  {
-    key: "admin",
-    label: "Administration",
-    href: "/admin",
-    icon: <LockRoundedIcon sx={{ fontSize: 16 }} />,
-  },
 ];
+
+const ANALYTICS_NAV_ITEM: NavItem = {
+  key: "analytics",
+  label: "Analytics",
+  href: "/analytics",
+  icon: <InsightsRoundedIcon sx={{ fontSize: 16 }} />,
+};
 
 /**
  * Responsive top navigation.
@@ -65,6 +67,21 @@ export function TopNav({
 }) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [anchor, setAnchor] = React.useState<null | HTMLElement>(null);
+  const [isAnalytics, setIsAnalytics] = React.useState(false);
+
+  React.useEffect(() => {
+    const supabase = createClient();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("user").select("role").eq("user_id", user.id).single();
+      if (data?.role === "analytics") setIsAnalytics(true);
+    })();
+  }, []);
+
+  const navItems = isAnalytics ? [...NAV_ITEMS, ANALYTICS_NAV_ITEM] : NAV_ITEMS;
 
   return (
     <header className="sticky top-0 z-40 border-b border-grey-200 bg-grey-50 shadow-sm">
@@ -86,7 +103,7 @@ export function TopNav({
         </Link>
 
         <nav className="hidden flex-1 items-center justify-center gap-8 self-stretch md:flex">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active = item.key === activeKey;
             return (
               <Link
@@ -165,7 +182,7 @@ export function TopNav({
       <Drawer anchor="left" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <nav className="w-72 p-2 pt-4" aria-label="Main menu">
           <div className="mb-3 px-3">{logo}</div>
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active = item.key === activeKey;
             return (
               <Link
