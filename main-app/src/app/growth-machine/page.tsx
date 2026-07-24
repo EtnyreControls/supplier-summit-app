@@ -3,7 +3,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import ConstructionRoundedIcon from "@mui/icons-material/ConstructionRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
-import { PageContainer, SectionHeader, TopNav, NavLogo, useToast, useProfileModal } from "@/components";
+import { PageContainer, SectionHeader, TopNav, NavLogo, useToast, useProfileModal, useBadgeQrModal } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 
 /**
@@ -62,6 +62,7 @@ export default function GrowthMachinePage() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
+  const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const router = useRouter();
 
   return (
@@ -70,7 +71,7 @@ export default function GrowthMachinePage() {
         activeKey="growth-machine"
         logo={<NavLogo />}
         initials="SC"
-        onQrClick={() => showToast("Badge QR opened")}
+        onQrClick={openBadgeQr}
         onProfile={openProfile}
         onLogout={handleLogout}
       />
@@ -109,6 +110,7 @@ export default function GrowthMachinePage() {
       </PageContainer>
       {toast}
       {profileModal}
+      {badgeQrModal}
     </div>
   );
 }

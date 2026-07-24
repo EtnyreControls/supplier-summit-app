@@ -1,10 +1,5 @@
 # Supplier Summit — Row Level Security & Data Protection Reference
 
-Copy everything below into a file named `RLS-and-security.md`.
-
-```markdown
-# Supplier Summit — Row Level Security & Data Protection Reference
-
 *Prepared for IT review. Covers all RLS policies as designed, plus supplementary risk measures beyond RLS.*
 
 ---
@@ -295,6 +290,3 @@ RLS governs *row-level authorization* once a request reaches Postgres — it doe
 
 ### Backup & audit
 - **No audit logging is currently designed into this schema** — if you need to answer "who changed this event's status" or "who edited this speaker bio" after the fact, that requires either Supabase's built-in Postgres logs (retained per your plan tier) or an explicit `audit_log` table populated by triggers on admin-writable tables. Given the single-admin structural model, this may be lower priority, but worth flagging as a gap if a security review asks for change traceability.
-```
-
-Want me to draft the `audit_log` table and trigger set next, since that's the one gap flagged with no mitigation yet?
