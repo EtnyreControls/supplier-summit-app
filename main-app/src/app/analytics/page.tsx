@@ -2,6 +2,7 @@ import Link from "next/link";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/components";
+import type { AddressableItem } from "@/components";
 import { AnalyticsPageClient } from "./analytics-page-client";
 
 /**
@@ -11,6 +12,16 @@ import { AnalyticsPageClient } from "./analytics-page-client";
  * someone hitting the URL directly, so this checks the real DB role
  * (replacing the old demo PIN gate) before rendering anything.
  */
+
+type QuestionGroupRow = {
+  group_id: string;
+  composed_question: string | null;
+  topic: string | null;
+  checked: boolean;
+  checked_at: string | null;
+  questions: { question_id: string }[] | null;
+};
+
 export default async function AnalyticsPage() {
   const supabase = await createClient();
 
@@ -39,5 +50,26 @@ export default async function AnalyticsPage() {
     );
   }
 
-  return <AnalyticsPageClient />;
+  const { data: groupRows } = await supabase
+    .from("question_groups")
+    .select("group_id, composed_question, topic, checked, checked_at, questions(question_id)")
+    .order("created_at", { ascending: false })
+    .returns<QuestionGroupRow[]>();
+
+  // "Votes" has no dedicated column yet — a group's size (how many attendees
+  // asked essentially the same question, per the AI clustering) doubles as
+  // the popularity signal, same number as the "N similar" chip.
+  const initialQuestions: AddressableItem[] = (groupRows ?? []).map((row) => {
+    const groupCount = row.questions?.length ?? 0;
+    return {
+      id: row.group_id,
+      text: row.composed_question ?? row.topic ?? "(no question text)",
+      votes: groupCount,
+      groupCount: groupCount > 1 ? groupCount : undefined,
+      addressed: row.checked,
+      addressedAt: row.checked_at ? new Date(row.checked_at).getTime() : null,
+    };
+  });
+
+  return <AnalyticsPageClient initialQuestions={initialQuestions} />;
 }

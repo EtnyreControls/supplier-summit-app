@@ -29,3 +29,4 @@ export { AgendaTimeline, type AgendaSession } from "./agenda/agenda-timeline";
 export { SessionDetail, type AgendaSpeaker } from "./agenda/session-detail";
 export { AddressableList, sortAddressable, type AddressableItem } from "./admin/addressable-list";
 export { VoteLeaderboard, type VoteEntry } from "./admin/vote-leaderboard";
+export { FeedbackTopics, type FeedbackTopic, type FeedbackTopicsResponse } from "./admin/feedback-topics";
