@@ -1,0 +1,9 @@
+INFO:     Started server process [28620]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     127.0.0.1:65002 - "GET /openapi.json HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights:  88%|########7 | 175/199 [00:00<00:00, 1672.09it/s]Loading weights: 100%|##########| 199/199 [00:00<00:00, 1780.61it/s]
+INFO:     127.0.0.1:64705 - "POST /api/questions/groups/refresh HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54283 - "POST /api/questions/groups/refresh HTTP/1.1" 200 OK

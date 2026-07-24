@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "C:\Users\Naimisha1d\Downloads\summit-project\suppliersummitappofficial\nlp-service\app.py", line 25, in <module>
+    from supabase import Client, create_client
+ModuleNotFoundError: No module named 'supabase'

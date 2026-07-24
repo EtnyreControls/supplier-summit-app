@@ -7,3 +7,6 @@ Asking to truncate to max_length but no maximum length is provided and the model
 INFO:     127.0.0.1:50331 - "POST /api/feedback/topics/refresh HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63665 - "GET /api/feedback/topics HTTP/1.1" 200 OK
 INFO:     127.0.0.1:63665 - "GET /api/feedback/topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62594 - "POST /api/questions/groups/refresh HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62596 - "GET /api/feedback/topics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56816 - "GET /openapi.json HTTP/1.1" 200 OK

@@ -13,7 +13,7 @@ import { AiTag } from "../ai-tag";
 import { EmptyState } from "../feedback";
 
 export interface FeedbackTopic {
-  topic_id: number;
+  topic_id: string;
   label: string;
   item_count: number;
   summary: string;
