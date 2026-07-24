@@ -1,0 +1,58 @@
+"""Hardcoded fallback feedback used when Supabase has no supplier_feedback rows."""
+
+SAMPLE_FEEDBACK: list[str] = [
+    # Wifi / venue tech
+    "Wifi in Breakout Room B was unreliable during the session.",
+    "Couldn't get the conference wifi to connect on my laptop all morning.",
+    "The wifi kept dropping every few minutes during the keynote.",
+    "Network was so slow I couldn't load the polling app during the session.",
+    "Please get a stronger wifi signal in the east wing next year.",
+    "Had to use my phone hotspot because the venue wifi never worked.",
+    "Wifi password kept expiring and no one at the help desk could fix it.",
+    "Connectivity issues made it hard to follow along with the live demo.",
+    # Breakout / Q&A pacing
+    "Breakout rooms ran long — Q&A got cut short twice.",
+    "Loved the content but we never got to audience questions because we ran out of time.",
+    "The logistics breakout session felt rushed at the end, no time for Q&A.",
+    "Sessions kept running over, which pushed Q&A out entirely in two of the four I attended.",
+    "Would have liked more time for questions after the supplier scorecards talk.",
+    "Every breakout I went to ran 10-15 minutes over and ate into the next session's Q&A.",
+    "Please build in a hard stop for speakers so Q&A doesn't get skipped.",
+    "The moderator cut off questions early because the room was already behind schedule.",
+    # Hands-on / demo format
+    "Would love more hands-on demo time next year vs. slides.",
+    "Too many slide decks, not enough live product demos.",
+    "The AI forecasting session was mostly a slideshow — I wanted to actually try the tool.",
+    "More interactive workshops please, less passive sitting and listening.",
+    "Give us a hands-on lab track next year instead of another round of slide presentations.",
+    "The demo station for the new supplier portal was the best part of the whole summit.",
+    "Wish every breakout had a hands-on component like the logistics one did.",
+    "Slides were fine but I learn a lot more from getting to click through the actual tool.",
+    # Food / logistics
+    "Lunch line took 40+ minutes — consider a second station.",
+    "Coffee ran out by 9:30am both days, need more stations.",
+    "The lunch line was so long I missed the start of the afternoon session.",
+    "Please add a second lunch station, the wait ate into our networking time.",
+    "Food was good but the line management needs work, 45 minutes is too long.",
+    "Snack breaks were well timed but the lunch buffet needs more staff serving.",
+    "Ran out of the vegetarian option by the time our badge group got through the line.",
+    "Loved the food quality, just need to fix the line so it moves faster.",
+    # Registration / badge / check-in
+    "Badge printer at check-in jammed twice this morning.",
+    "Check-in line moved slowly because only two badge printers were working.",
+    "My badge had the wrong company name printed on it and no one could fix it on site.",
+    "Registration desk was understaffed for the first hour, long line at check-in.",
+    "The badge scanner at the entrance kept failing, had to be manually checked in.",
+    "Please open registration earlier, the line was out the door by 8am.",
+    "Badge printing station broke down and we had to wait 20 minutes for a replacement.",
+    "Check-in itself was quick once we got to the front, just needed more printers running.",
+    # Positive / general praise
+    "Loved the logistics breakout — more like this please.",
+    "Best supplier summit yet, the sustainability session was fantastic.",
+    "Great lineup of speakers this year, especially the supply chain resilience keynote.",
+    "The networking reception on day one was a great way to meet other suppliers.",
+    "Really appreciated how organized the agenda app was this year.",
+    "The supplier diversity panel was one of the most valuable sessions I attended.",
+    "Venue and signage made it easy to find every session, well done.",
+    "Whole event felt more polished than last year, great job to the organizing team.",
+]

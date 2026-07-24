@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+bertopic
+sentence-transformers
+# transformers>=5 dropped the summarization/translation/text2text-generation
+# pipeline tasks from PIPELINE_REGISTRY, so hf_pipeline("summarization", ...)
+# raises KeyError. Pin to the last 4.x line, which still supports it.
+transformers==4.57.6
+# transformers 4.57.6 requires huggingface-hub<1.0.
+huggingface_hub==0.36.2
+tokenizers==0.22.2
+torch
+supabase
+python-dotenv
