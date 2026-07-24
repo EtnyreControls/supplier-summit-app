@@ -22,6 +22,7 @@ import {
   useAdminUnlocked,
   AddressableList,
   VoteLeaderboard,
+  FeedbackTopics,
   type PollOption,
   type AddressableItem,
   type VoteEntry,
@@ -228,6 +229,9 @@ export default function AdminPage() {
                 <>
                   <SectionHeader eyebrow={`${feedbackOpen} open`} title="Session feedback" />
                   <AddressableList items={feedback} onToggle={toggleFeedback} votesLabel="flags" />
+
+                  <SectionHeader eyebrow="Auto-clustered" title="Feedback Topics" />
+                  <FeedbackTopics showToast={showToast} />
                 </>
               )}
 
