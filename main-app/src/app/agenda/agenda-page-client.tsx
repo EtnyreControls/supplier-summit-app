@@ -13,6 +13,7 @@ import {
   EmptyState,
   useToast,
   useProfileModal,
+  useBadgeQrModal,
   type AgendaSession,
   type AgendaSpeaker,
 } from "@/components";
@@ -32,6 +33,7 @@ export function AgendaPageClient({
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
+  const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const defaultSession = sessions.find((s) => s.live) ?? sessions[0];
   const [selectedId, setSelectedId] = React.useState(defaultSession?.id ?? "");
   const selected = sessions.find((s) => s.id === selectedId) ?? defaultSession;
@@ -43,7 +45,7 @@ export function AgendaPageClient({
         activeKey="agenda"
         logo={<NavLogo />}
         initials="SC"
-        onQrClick={() => showToast("Badge QR opened")}
+        onQrClick={openBadgeQr}
         onProfile={openProfile}
         onLogout={handleLogout}
       />
@@ -98,6 +100,7 @@ export function AgendaPageClient({
       </PageContainer>
       {toast}
       {profileModal}
+      {badgeQrModal}
     </div>
   );
 }

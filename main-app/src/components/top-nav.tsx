@@ -11,6 +11,7 @@ import Drawer from "@mui/material/Drawer";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import { ModeToggle } from "./mode-toggle";
@@ -133,6 +134,17 @@ export function TopNav({
               <PersonRoundedIcon fontSize="small" />
             </ListItemIcon>
             My profile
+          </MenuItem>
+          <MenuItem
+            component={Link}
+            href="/contacts"
+            onClick={() => setAnchor(null)}
+            sx={{ fontSize: 14 }}
+          >
+            <ListItemIcon>
+              <PeopleAltRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            Saved contacts
           </MenuItem>
           <Divider />
           <MenuItem

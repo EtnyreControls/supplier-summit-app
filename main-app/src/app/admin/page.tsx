@@ -18,6 +18,7 @@ import {
   EmptyState,
   useToast,
   useProfileModal,
+  useBadgeQrModal,
   AdminGate,
   useAdminUnlocked,
   AddressableList,
@@ -134,6 +135,7 @@ export default function AdminPage() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
+  const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const { unlocked, unlock } = useAdminUnlocked();
   const [section, setSection] = React.useState<SectionKey>("questions");
   const [questions, setQuestions] = React.useState(INITIAL_QUESTIONS);
@@ -162,7 +164,7 @@ export default function AdminPage() {
         activeKey="admin"
         logo={<NavLogo />}
         initials="SC"
-        onQrClick={() => showToast("Badge QR opened")}
+        onQrClick={openBadgeQr}
         onProfile={openProfile}
         onLogout={handleLogout}
       />
@@ -287,6 +289,7 @@ export default function AdminPage() {
       )}
       {toast}
       {profileModal}
+      {badgeQrModal}
     </div>
   );
 }
