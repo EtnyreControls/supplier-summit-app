@@ -19,8 +19,6 @@ import {
   useToast,
   useProfileModal,
   useBadgeQrModal,
-  AdminGate,
-  useAdminUnlocked,
   AddressableList,
   VoteLeaderboard,
   type PollOption,
@@ -30,13 +28,13 @@ import {
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 
 /**
- * Route: /admin ("Administration" in TopNav, lock icon)
- * Staff-only. Gated behind AdminGate (demo PIN — see admin-gate.tsx for the
- * real-auth TODO). Sections: Questions & Feedback are ranked, checkable
- * worklists (checking an item off sends it to the bottom); Voting is a
- * read-only leaderboard; Polls shows live/closed poll results; Dashboard is
- * a lightweight analytics summary built from the same in-memory state, so
- * resolving items elsewhere updates it live.
+ * Route: /analytics ("Analytics" in TopNav, role="analytics" only —
+ * see app/analytics/page.tsx for the server-side role check).
+ * Sections: Questions & Feedback are ranked, checkable worklists (checking
+ * an item off sends it to the bottom); Voting is a read-only leaderboard;
+ * Polls shows live/closed poll results; Dashboard is a lightweight summary
+ * built from the same in-memory state, so resolving items elsewhere updates
+ * it live.
  *
  * TODO: swap all mock data below for real Supabase queries once wired up.
  */
@@ -85,14 +83,14 @@ const VOTE_SESSIONS: VoteEntry[] = [
   { id: "s4", label: "Q&A with leadership", votes: 37 },
 ];
 
-interface AdminPoll {
+interface AnalyticsPoll {
   id: string;
   question: string;
   live: boolean;
   options: PollOption[];
 }
 
-const POLLS: AdminPoll[] = [
+const POLLS: AnalyticsPoll[] = [
   {
     id: "p1",
     question: "Which topic should headline next year's keynote?",
@@ -131,12 +129,11 @@ function addressedRate(items: AddressableItem[]) {
   return (items.filter((i) => i.addressed).length / items.length) * 100;
 }
 
-export default function AdminPage() {
+export function AnalyticsPageClient() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
-  const { unlocked, unlock } = useAdminUnlocked();
   const [section, setSection] = React.useState<SectionKey>("questions");
   const [questions, setQuestions] = React.useState(INITIAL_QUESTIONS);
   const [feedback, setFeedback] = React.useState(INITIAL_FEEDBACK);
@@ -161,7 +158,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-dvh bg-background">
       <TopNav
-        activeKey="admin"
+        activeKey="analytics"
         logo={<NavLogo />}
         initials="SC"
         onQrClick={openBadgeQr}
@@ -169,124 +166,120 @@ export default function AdminPage() {
         onLogout={handleLogout}
       />
 
-      {unlocked === false && <AdminGate onUnlock={unlock} />}
+      <PageContainer>
+        <SectionHeader eyebrow="Analytics only" title="Analytics" />
 
-      {unlocked && (
-        <PageContainer>
-          <SectionHeader eyebrow="Staff only" title="Administration" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_1fr] lg:items-start">
+          {/* Desktop sidebar — same active-item convention as TopNav's mobile drawer. */}
+          <nav
+            aria-label="Analytics sections"
+            className="hidden rounded-(--radius-card) border border-grey-200 bg-surface p-2 lg:sticky lg:top-24 lg:block"
+          >
+            {SECTIONS.map((s) => {
+              const active = s.key === section;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setSection(s.key)}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex w-full items-center gap-3 rounded-(--radius-control) border-l-[3px] px-3 py-3 text-left text-sm transition-colors ${
+                    active
+                      ? "border-yellow bg-yellow-tint font-semibold text-ink"
+                      : "border-transparent text-grey-700 hover:bg-grey-50"
+                  }`}
+                >
+                  <span className={active ? "text-ink" : "text-grey-500"}>{s.icon}</span>
+                  {s.label}
+                </button>
+              );
+            })}
+          </nav>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_1fr] lg:items-start">
-            {/* Desktop sidebar — same active-item convention as TopNav's mobile drawer. */}
-            <nav
-              aria-label="Administration sections"
-              className="hidden rounded-(--radius-card) border border-grey-200 bg-surface p-2 lg:sticky lg:top-24 lg:block"
+          {/* Mobile section switcher */}
+          <div className="-mx-1 lg:hidden">
+            <Tabs
+              value={section}
+              onChange={(_, v: SectionKey) => setSection(v)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              aria-label="Analytics sections"
             >
-              {SECTIONS.map((s) => {
-                const active = s.key === section;
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setSection(s.key)}
-                    aria-current={active ? "page" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-(--radius-control) border-l-[3px] px-3 py-3 text-left text-sm transition-colors ${
-                      active
-                        ? "border-yellow bg-yellow-tint font-semibold text-ink"
-                        : "border-transparent text-grey-700 hover:bg-grey-50"
-                    }`}
-                  >
-                    <span className={active ? "text-ink" : "text-grey-500"}>{s.icon}</span>
-                    {s.label}
-                  </button>
-                );
-              })}
-            </nav>
-
-            {/* Mobile section switcher */}
-            <div className="-mx-1 lg:hidden">
-              <Tabs
-                value={section}
-                onChange={(_, v: SectionKey) => setSection(v)}
-                variant="scrollable"
-                scrollButtons="auto"
-                allowScrollButtonsMobile
-                aria-label="Administration sections"
-              >
-                {SECTIONS.map((s) => (
-                  <Tab key={s.key} value={s.key} icon={s.icon} iconPosition="start" label={s.label} sx={{ minHeight: 44 }} />
-                ))}
-              </Tabs>
-            </div>
-
-            <div>
-              {section === "questions" && (
-                <>
-                  <SectionHeader eyebrow={`${questionsOpen} open`} title="Submitted questions" />
-                  <AddressableList items={questions} onToggle={toggleQuestion} />
-                </>
-              )}
-
-              {section === "feedback" && (
-                <>
-                  <SectionHeader eyebrow={`${feedbackOpen} open`} title="Session feedback" />
-                  <AddressableList items={feedback} onToggle={toggleFeedback} votesLabel="flags" />
-                </>
-              )}
-
-              {section === "voting" && (
-                <>
-                  <SectionHeader eyebrow="Ranked results" title="Voting" />
-                  <div className="flex flex-col gap-4">
-                    <VoteLeaderboard title="Next year's topic vote" entries={VOTE_TOPICS} />
-                    <VoteLeaderboard title="Most-attended session (by badge scan)" entries={VOTE_SESSIONS} />
-                  </div>
-                </>
-              )}
-
-              {section === "polls" && (
-                <>
-                  <SectionHeader eyebrow="Live & closed" title="Poll results" />
-                  <div className="flex flex-col gap-4">
-                    {POLLS.map((poll) => (
-                      <PollCard key={poll.id} question={poll.question} options={poll.options} live={poll.live} showResults />
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {section === "dashboard" && (
-                <>
-                  <SectionHeader eyebrow="Overview" title="Analytics dashboard" />
-
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <StatCard value="486" label="Badges checked in" />
-                    <StatCard value={String(questions.length + feedback.length)} label="Submissions today" />
-                    <StatCard value="79%" label="Poll participation" />
-                    <StatCard value="4.4 / 5" label="Avg. session rating" />
-                  </div>
-
-                  <SectionHeader eyebrow="Follow-up" title="Resolution progress" />
-                  <div className="flex flex-col gap-4 rounded-(--radius-card) border border-grey-200 bg-surface p-4">
-                    <LabeledProgress label="Questions addressed" value={addressedRate(questions)} />
-                    <LabeledProgress label="Feedback reviewed" value={addressedRate(feedback)} />
-                  </div>
-
-                  <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <VoteLeaderboard title="Top question themes" entries={VOTE_TOPICS.slice(0, 4)} />
-                    <VoteLeaderboard title="Engagement by session" entries={VOTE_SESSIONS} />
-                  </div>
-
-                  {questionsOpen === 0 && feedbackOpen === 0 && (
-                    <div className="mt-6">
-                      <EmptyState title="All caught up" body="Every question and feedback item has been addressed." />
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+              {SECTIONS.map((s) => (
+                <Tab key={s.key} value={s.key} icon={s.icon} iconPosition="start" label={s.label} sx={{ minHeight: 44 }} />
+              ))}
+            </Tabs>
           </div>
-        </PageContainer>
-      )}
+
+          <div>
+            {section === "questions" && (
+              <>
+                <SectionHeader eyebrow={`${questionsOpen} open`} title="Submitted questions" />
+                <AddressableList items={questions} onToggle={toggleQuestion} />
+              </>
+            )}
+
+            {section === "feedback" && (
+              <>
+                <SectionHeader eyebrow={`${feedbackOpen} open`} title="Session feedback" />
+                <AddressableList items={feedback} onToggle={toggleFeedback} votesLabel="flags" />
+              </>
+            )}
+
+            {section === "voting" && (
+              <>
+                <SectionHeader eyebrow="Ranked results" title="Voting" />
+                <div className="flex flex-col gap-4">
+                  <VoteLeaderboard title="Next year's topic vote" entries={VOTE_TOPICS} />
+                  <VoteLeaderboard title="Most-attended session (by badge scan)" entries={VOTE_SESSIONS} />
+                </div>
+              </>
+            )}
+
+            {section === "polls" && (
+              <>
+                <SectionHeader eyebrow="Live & closed" title="Poll results" />
+                <div className="flex flex-col gap-4">
+                  {POLLS.map((poll) => (
+                    <PollCard key={poll.id} question={poll.question} options={poll.options} live={poll.live} showResults />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {section === "dashboard" && (
+              <>
+                <SectionHeader eyebrow="Overview" title="Analytics dashboard" />
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <StatCard value="486" label="Badges checked in" />
+                  <StatCard value={String(questions.length + feedback.length)} label="Submissions today" />
+                  <StatCard value="79%" label="Poll participation" />
+                  <StatCard value="4.4 / 5" label="Avg. session rating" />
+                </div>
+
+                <SectionHeader eyebrow="Follow-up" title="Resolution progress" />
+                <div className="flex flex-col gap-4 rounded-(--radius-card) border border-grey-200 bg-surface p-4">
+                  <LabeledProgress label="Questions addressed" value={addressedRate(questions)} />
+                  <LabeledProgress label="Feedback reviewed" value={addressedRate(feedback)} />
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <VoteLeaderboard title="Top question themes" entries={VOTE_TOPICS.slice(0, 4)} />
+                  <VoteLeaderboard title="Engagement by session" entries={VOTE_SESSIONS} />
+                </div>
+
+                {questionsOpen === 0 && feedbackOpen === 0 && (
+                  <div className="mt-6">
+                    <EmptyState title="All caught up" body="Every question and feedback item has been addressed." />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </PageContainer>
       {toast}
       {profileModal}
       {badgeQrModal}
