@@ -2,6 +2,9 @@ fastapi
 uvicorn[standard]
 bertopic
 sentence-transformers
+# Already an installed transitive dependency (via scikit-learn/umap); listed
+# explicitly now that app.py imports it directly for question grouping.
+scipy
 # transformers>=5 dropped the summarization/translation/text2text-generation
 # pipeline tasks from PIPELINE_REGISTRY, so hf_pipeline("summarization", ...)
 # raises KeyError. Pin to the last 4.x line, which still supports it.
