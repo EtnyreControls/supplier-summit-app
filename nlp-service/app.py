@@ -66,7 +66,7 @@ QUESTIONS_EMBEDDING_MODEL = "sentence-transformers/multi-qa-mpnet-base-dot-v1"
 # limitation — it works the same way at any batch size, including N=1 or
 # N=2, since every question starts as its own singleton component and only
 # merges when it's actually similar enough to another one.
-QUESTION_SIMILARITY_THRESHOLD = 0.70
+QUESTION_SIMILARITY_THRESHOLD = 0.65
 
 app = FastAPI(title="Supplier Summit NLP Service")
 

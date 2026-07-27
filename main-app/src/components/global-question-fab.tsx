@@ -1,6 +1,6 @@
 "use client";
 import { usePathname } from "next/navigation";
-import { QuestionFab } from "./question-fab";
+import { QuestionFab, type QuestionSubmission } from "./question-fab";
 import { useToast } from "./feedback";
 import { submitQuestion } from "@/lib/supabase/submit-question";
 
@@ -13,8 +13,8 @@ export function GlobalQuestionFab() {
   const { toast, showToast } = useToast();
   if (HIDDEN_ON.includes(pathname)) return null;
 
-  const handleSubmit = async (q: string) => {
-    const { error } = await submitQuestion(q);
+  const handleSubmit = async ({ question, topic, isAnonymous }: QuestionSubmission) => {
+    const { error } = await submitQuestion(question, topic, isAnonymous);
     showToast(error ?? "Question submitted", error ? "error" : "success");
   };
 

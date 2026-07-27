@@ -19,6 +19,7 @@ type QuestionGroupRow = {
   topic: string | null;
   checked: boolean;
   checked_at: string | null;
+  answer_text: string | null;
   questions: { question_id: string; submission_info: string | null }[] | null;
 };
 
@@ -52,7 +53,7 @@ export default async function AnalyticsPage() {
 
   const { data: groupRows } = await supabase
     .from("question_groups")
-    .select("group_id, composed_question, topic, checked, checked_at, questions(question_id, submission_info)")
+    .select("group_id, composed_question, topic, checked, checked_at, answer_text, questions(question_id, submission_info)")
     .order("created_at", { ascending: false })
     .returns<QuestionGroupRow[]>();
 
@@ -67,7 +68,10 @@ export default async function AnalyticsPage() {
       text: row.composed_question ?? row.topic ?? "(no question text)",
       count: groupCount,
       groupCount: groupCount > 1 ? groupCount : undefined,
-      groupItems: (row.questions ?? []).map((q) => q.submission_info).filter((t): t is string => !!t),
+      groupItems: (row.questions ?? [])
+        .filter((q) => !!q.submission_info)
+        .map((q) => ({ id: q.question_id, text: q.submission_info as string })),
+      answerText: row.answer_text,
       addressed: row.checked,
       addressedAt: row.checked_at ? new Date(row.checked_at).getTime() : null,
     };
