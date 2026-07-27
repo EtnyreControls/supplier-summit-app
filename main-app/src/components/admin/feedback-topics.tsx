@@ -52,6 +52,7 @@ export function FeedbackTopics({
     (async () => {
       try {
         const res = await fetch("/api/feedback/topics");
+        if (!res.ok) throw new Error("Failed to load feedback topics");
         const json: FeedbackTopicsResponse = await res.json();
         if (!cancelled) setData(json);
       } catch {

@@ -24,6 +24,7 @@ import {
   type SubmittedQuestion,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
+import { submitFeedback } from "@/lib/supabase/submit-feedback";
 
 /**
  * Three tabs: Polls (scheduled + anytime, both rendered with the shared
@@ -161,7 +162,9 @@ export function PollsPageClient({ initialQuestions }: { initialQuestions: Submit
   const [scheduledVotes, setScheduledVotes] = React.useState<Record<string, string>>({});
   const [anytimeVotes, setAnytimeVotes] = React.useState<Record<string, string>>({});
   const [rating, setRating] = React.useState<string | null>(null);
+  const [comment, setComment] = React.useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = React.useState(false);
+  const [submittingFeedback, setSubmittingFeedback] = React.useState(false);
 
   const voteScheduled = (pollId: string, optionId: string) => {
     setScheduledVotes((v) => (v[pollId] ? v : { ...v, [pollId]: optionId }));
@@ -265,8 +268,15 @@ export function PollsPageClient({ initialQuestions }: { initialQuestions: Submit
                   "How valuable has today been for your partnership with Etnyre?",
                   "Anything we should change or do more of?",
                 ]}
-                canAdvance={(i) => (i === 0 ? rating !== null : true)}
-                onComplete={() => {
+                canAdvance={(i) => (i === 0 ? rating !== null : !submittingFeedback)}
+                onComplete={async () => {
+                  setSubmittingFeedback(true);
+                  const { error } = await submitFeedback(rating ?? "", comment);
+                  setSubmittingFeedback(false);
+                  if (error) {
+                    showToast(error, "error");
+                    return;
+                  }
                   setFeedbackSubmitted(true);
                   showToast("Feedback submitted — thank you");
                 }}
@@ -290,7 +300,13 @@ export function PollsPageClient({ initialQuestions }: { initialQuestions: Submit
                       ))}
                     </div>
                   ) : (
-                    <TextField multiline minRows={3} placeholder="Anything goes — this is anonymous" />
+                    <TextField
+                      multiline
+                      minRows={3}
+                      placeholder="Anything goes — this is anonymous"
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                    />
                   )
                 }
               </FeedbackStepper>
