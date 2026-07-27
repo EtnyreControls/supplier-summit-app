@@ -2,7 +2,7 @@ import Link from "next/link";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/components";
-import type { AddressableItem } from "@/components";
+import type { AddressableItem, FeedbackTopicsResponse } from "@/components";
 import { AnalyticsPageClient } from "./analytics-page-client";
 
 /**
@@ -88,7 +88,7 @@ export default async function AnalyticsPage() {
 
   const { data: latestRun } = await supabase
     .from("feedback_topic_runs")
-    .select("run_id")
+    .select("run_id, cached_at")
     .order("cached_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -101,22 +101,19 @@ export default async function AnalyticsPage() {
         .returns<FeedbackTopicRow[]>()
     : { data: null };
 
-  // Feedback has no per-attendee identity to rank by (responses are
-  // anonymous), so unlike Questions, "count" here is topic size — how many
-  // raw responses clustered into this theme — same number nlp-service
-  // already surfaces as item_count in FeedbackTopics.
-  const initialFeedback: AddressableItem[] = (topicRows ?? []).map((row) => {
-    const groupCount = row.feedback_topic_items?.length ?? 0;
-    return {
-      id: row.topic_id,
-      text: row.summary || row.label,
-      count: groupCount,
-      groupCount: groupCount > 1 ? groupCount : undefined,
-      groupItems: (row.feedback_topic_items ?? []).map((i) => ({ id: i.item_id, text: i.raw_text })),
+  const initialFeedbackTopics: FeedbackTopicsResponse = {
+    status: latestRun ? "ok" : "not_yet_run",
+    cached_at: latestRun?.cached_at ?? null,
+    topics: (topicRows ?? []).map((row) => ({
+      topic_id: row.topic_id,
+      label: row.label,
+      item_count: row.feedback_topic_items?.length ?? 0,
+      summary: row.summary,
+      items: (row.feedback_topic_items ?? []).map((i) => i.raw_text),
       addressed: row.addressed,
-      addressedAt: row.addressed_at ? new Date(row.addressed_at).getTime() : null,
-    };
-  });
+      addressed_at: row.addressed_at,
+    })),
+  };
 
-  return <AnalyticsPageClient initialQuestions={initialQuestions} initialFeedback={initialFeedback} />;
+  return <AnalyticsPageClient initialQuestions={initialQuestions} initialFeedbackTopics={initialFeedbackTopics} />;
 }

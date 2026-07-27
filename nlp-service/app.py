@@ -40,13 +40,6 @@ TOPIC_ITEMS_TABLE = "feedback_topic_items"
 # since there's no real row to link to.
 FeedbackItem = tuple[Optional[str], str]
 
-# HDBSCAN requires enough densely-packed items to form a cluster at all, so
-# small batches (an event with only a handful of feedback items) always came
-# back as noise. A distance threshold merges items greedily up to a cosine-
-# distance cutoff instead, which works the same way at any batch size —
-# including N=1 or N=2 — with no minimum-density requirement.
-DISTANCE_THRESHOLD = 0.3
-
 QUESTION_GROUPS_TABLE = "question_groups"
 QUESTIONS_TABLE = "questions"
 # Questions need a model tuned for query/question *intent* matching (trained
@@ -171,7 +164,6 @@ def load_feedback(supabase: Optional[Client]) -> list[FeedbackItem]:
 
 def build_topic_model(n_docs: int):
     from bertopic import BERTopic
-    from sklearn.cluster import AgglomerativeClustering
     from umap import UMAP
 
     # BERTopic's defaults (min_topic_size=10, UMAP n_neighbors=15) assume a
@@ -188,23 +180,14 @@ def build_topic_model(n_docs: int):
         metric="cosine",
         random_state=42,
     )
-    # BERTopic accepts any clustering model exposing .fit()/.labels_ via the
-    # hdbscan_model param, despite the name — see DISTANCE_THRESHOLD above
-    # for why agglomerative clustering replaced HDBSCAN here. Items whose
-    # nearest merge exceeds DISTANCE_THRESHOLD are left as their own
-    # singleton cluster rather than forced into an unrelated one — the
-    # default behavior once distance_threshold is set with n_clusters=None.
-    clustering_model = AgglomerativeClustering(
-        n_clusters=None,
-        metric="cosine",
-        linkage="average",
-        distance_threshold=DISTANCE_THRESHOLD,
-    )
 
+    # No hdbscan_model override — uses BERTopic's built-in HDBSCAN clustering
+    # with default settings. Note: HDBSCAN needs enough densely-packed items
+    # to form a cluster at all, so small batches (an event with only a
+    # handful of feedback items) can land entirely in the -1 "noise" bucket.
     return BERTopic(
         embedding_model=get_embedding_model(),
         umap_model=umap_model,
-        hdbscan_model=clustering_model,
         min_topic_size=min_topic_size,
         calculate_probabilities=False,
         verbose=False,

@@ -2,6 +2,8 @@
 import * as React from "react";
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 
 export interface SubmittedQuestion {
   id: string;
@@ -10,9 +12,36 @@ export interface SubmittedQuestion {
   answerText: string | null;
 }
 
+/* Tonal pills, not MUI's default filled/outlined chips — mirrors the
+   Alert severity treatment (fixed dark "success" chip w/ yellow icon,
+   amber-100/900/700 tint for "warning") so status reads consistently
+   with the rest of the design system in both color schemes. */
 function statusChip(status: string) {
-  if (status === "answered") return <Chip size="small" color="success" label="Answered" />;
-  if (status === "pending") return <Chip size="small" color="warning" variant="outlined" label="Pending" />;
+  if (status === "answered") {
+    return (
+      <Chip
+        size="small"
+        color="success"
+        icon={<CheckRoundedIcon sx={{ fontSize: 15 }} />}
+        label="Answered"
+        sx={{ "& .MuiChip-icon": { color: "var(--summit-yellow)" } }}
+      />
+    );
+  }
+  if (status === "pending") {
+    return (
+      <Chip
+        size="small"
+        icon={<ScheduleRoundedIcon sx={{ fontSize: 15 }} />}
+        label="Pending"
+        sx={{
+          bgcolor: "var(--summit-amber-100)",
+          color: "var(--summit-amber-900)",
+          "& .MuiChip-icon": { color: "var(--summit-amber-700)" },
+        }}
+      />
+    );
+  }
   return <Chip size="small" label={status} />;
 }
 
