@@ -9,19 +9,16 @@ import { CONTAINER } from "../layout";
  * mode, bg-[#2A2A2E] in dark mode) so the two sections read as one
  * continuous "About Us" moment rather than two unrelated blocks.
  *
- * Shape language: desktop uses two trapezoids (gentle diagonal cut),
- * staggered slightly — Mission first, Vision second, matching the site's
- * Mission→Vision order (deck order is reversed, site order is not).
- * Mobile is a literal hexagon, split down the middle: two hexagon halves,
- * same 25%/75% taper as EtnBanner's own hexagon, sitting flush (no gap).
- * The text box inside each half is padded to match the hexagon's own
- * geometry exactly — 25% padding on the pointed side, so text starts
- * precisely where the taper ends rather than guessing a safe margin.
- * The original hexagon's points face outward (Mission points left,
- * Vision points right).
+ * Shape language: same literal hexagon on both breakpoints, split down the
+ * middle — two hexagon halves, same 25%/75% taper as EtnBanner's own
+ * hexagon, sitting flush (no gap). The text box inside each half is padded
+ * to match the hexagon's own geometry exactly — 25% padding on the pointed
+ * side, so text starts precisely where the taper ends rather than guessing
+ * a safe margin. The points face outward (Mission points left, Vision
+ * points right).
  *
- * Desktop (sm and up): trapezoids sit side by side, both statements fully
- * visible — no interaction needed, there's room to just read them.
+ * Desktop (sm and up): hexagon halves sit side by side, both statements
+ * fully visible — no interaction needed, there's room to just read them.
  * Mobile: hexagon halves sit flush with a slight vertical offset (Mission
  * a touch higher). Each is tap-to-flip — front shows the label + headline,
  * back reveals the full statement — since full text for both doesn't fit
@@ -55,16 +52,14 @@ export function MissionVision() {
           pursuing both purpose and profit.
         </p>
 
-        {/* Desktop: side by side, fully readable, no interaction */}
-        <div className="mt-10 hidden gap-5 sm:flex">
-          <TrapezoidStatic statement={MISSION} tone="yellow" lean="right" className="flex-1" />
-          <TrapezoidStatic
-            statement={VISION}
-            tone="grey"
-            lean="left"
-            className="flex-1 -ml-3"
-            paddingLeftClass="pl-14"
-          />
+        {/* Desktop: two separate hexagon shapes with a gap between them (unlike
+            mobile's flush-fit halves), staggered, fully readable, no interaction,
+            centered as a group. Fixed (not flex-1) width — a hexagon reads as a
+            hexagon at a width close to its height; stretching it edge-to-edge of
+            the row is what made it look like a banner instead of a hexagon. */}
+        <div className="mt-10 hidden items-start justify-center gap-8 sm:flex">
+          <HexHalfStatic statement={MISSION} tone="yellow" point="left" widthPx={400} className="shrink-0 -translate-y-4" />
+          <HexHalfStatic statement={VISION} tone="grey" point="right" widthPx={400} className="shrink-0 translate-y-5" />
         </div>
 
         {/* Mobile: hexagon halves, rejoined (no gap), slight vertical offset, tap-to-flip */}
@@ -87,13 +82,6 @@ export function MissionVision() {
   );
 }
 
-/** Desktop trapezoid clip-path — a gentle single-side diagonal cut. */
-function trapezoidClip(lean: "left" | "right") {
-  return lean === "right"
-    ? "polygon(0 0, 100% 0, 94% 100%, 0 100%)"
-    : "polygon(6% 0, 100% 0, 100% 100%, 0 100%)";
-}
-
 /**
  * Half of a real hexagon — same 25%/75% breakpoints as EtnBanner's own
  * <Hexagon> — split down the middle. "left" = the hexagon's left half —
@@ -113,33 +101,48 @@ function toneClasses(tone: "yellow" | "grey") {
     : "bg-[#F2F2F0] text-[#1C1C1E]";
 }
 
-/** Desktop: always-expanded trapezoid, full statement visible. */
-function TrapezoidStatic({
+/** Desktop: always-expanded hexagon half, full statement visible — same
+ * shape AND same geometry rule as the mobile HexHalfFlip (hexHalfClip, 25%
+ * taper), just no flip interaction (room to show the full statement up
+ * front) and content-fit height (py padding, no fixed h-60) instead of
+ * mobile's fixed box. Now that the card is close to square (not the old
+ * wide/flat banner), the same 25%-of-width taper mobile uses reads as a
+ * proper deep hexagon point instead of a shallow slant.
+ *
+ * Padding is passed as px (computed from widthPx), not "25%"/"8%" like
+ * mobile — mobile's text box is `absolute inset-0`, so percentage padding
+ * resolves against its own box; this one is a normal-flow flex item, where
+ * percentage padding resolves against the *flex container's* width instead
+ * (a real CSS quirk, not a typo) — 25% would blow out to ~270px here and
+ * wrap the text into a sliver, inflating the card's height wildly. */
+function HexHalfStatic({
   statement,
   tone,
-  lean,
+  point,
+  widthPx,
   className = "",
-  paddingLeftClass = "pl-8",
 }: {
   statement: Statement;
   tone: "yellow" | "grey";
-  lean: "left" | "right";
+  point: "left" | "right";
+  widthPx: number;
   className?: string;
-  /** Override left padding independently of right/vertical padding — useful when a
-   * neighboring card's diagonal edge cuts into this card's visual space (e.g. Vision
-   * sitting -ml-3 next to Mission's slanted edge needs extra breathing room). */
-  paddingLeftClass?: string;
 }) {
+  const pointPad = widthPx * 0.25;
+  const flatPad = widthPx * 0.08;
+  const textStyle: React.CSSProperties =
+    point === "left" ? { paddingLeft: pointPad, paddingRight: flatPad } : { paddingRight: pointPad, paddingLeft: flatPad };
+
   return (
     <div
-      className={`flex flex-col justify-center py-9 pr-8 ${paddingLeftClass} ${toneClasses(tone)} ${className}`}
-      style={{ clipPath: trapezoidClip(lean) }}
+      className={`flex flex-col justify-center py-12 ${toneClasses(tone)} ${className}`}
+      style={{ clipPath: hexHalfClip(point), width: widthPx, ...textStyle }}
     >
-      <span className="mb-2 text-[11px] font-bold uppercase tracking-widest opacity-60">
+      <span className="mb-2 text-xs font-bold uppercase tracking-widest opacity-60">
         {statement.label}
       </span>
-      <h3 className="text-2xl font-extrabold leading-tight">{statement.headline}</h3>
-      <p className="mt-3 max-w-sm text-[14px] leading-relaxed opacity-85">{statement.body}</p>
+      <h3 className="text-3xl font-extrabold leading-tight">{statement.headline}</h3>
+      <p className="mt-3 text-[15px] leading-relaxed opacity-85">{statement.body}</p>
     </div>
   );
 }

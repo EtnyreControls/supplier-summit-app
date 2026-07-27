@@ -63,19 +63,6 @@ export default function Home() {
             { label: "Exhibitors", value: "18" },
           ]}
         />
-
-        <SectionHeader eyebrow="Happening now" title="Live session" />
-        <Banner>
-          Supply chain roadmap keynote — main hall · Next: Q&A with leadership, 11:15 AM
-        </Banner>
-
-        <SectionHeader eyebrow="Explore" title="Full schedule" />
-        <ListRow
-          icon={<ScheduleRoundedIcon />}
-          title="Agenda & speakers"
-          subtitle="Full session list, times, and speaker bios"
-          onClick={() => showToast("Opening agenda", "info")}
-        />
         <SectionHeader eyebrow="About Us" title="Our Brand" />
         <MissionVision />
         <OurValues />
