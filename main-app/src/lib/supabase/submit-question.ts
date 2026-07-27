@@ -16,12 +16,13 @@ const NLP_SERVICE_URL = "http://localhost:8001";
  * so a failed/slow regroup is swallowed rather than surfaced to the
  * submitter — the manual "Regroup" button in analytics covers retrying.
  */
-export async function submitQuestion(question: string, topic?: string) {
+export async function submitQuestion(question: string, topic?: string, isAnonymous = false) {
   const supabase = await createClient();
 
   const { error } = await supabase.rpc("submit_question", {
     p_topic: topic ?? null,
     p_question: question,
+    p_is_anonymous: isAnonymous,
   });
 
   if (error) {

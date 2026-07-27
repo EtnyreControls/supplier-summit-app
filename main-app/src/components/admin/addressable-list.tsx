@@ -3,15 +3,26 @@ import * as React from "react";
 import Card from "@mui/material/Card";
 import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { AiTag } from "../ai-tag";
+
+export interface AddressableGroupItem {
+  id: string;
+  text: string;
+}
 
 export interface AddressableItem {
   id: string;
   text: string;
   count: number; // how many attendees asked/flagged essentially this same item, per AI clustering
   groupCount?: number; // similar items clustered by AI
-  groupItems?: string[]; // the raw per-submission text underlying groupCount, shown when expanded
+  groupItems?: AddressableGroupItem[]; // the raw per-submission entries underlying groupCount, shown when expanded
+  answerText?: string | null; // present only where answering is wired up (e.g. Questions, not Feedback)
   addressed: boolean;
   addressedAt: number | null; // sort key among addressed items; null while unaddressed
 }
@@ -32,10 +43,14 @@ export function sortAddressable(items: AddressableItem[]): AddressableItem[] {
 export function AddressableList({
   items,
   onToggle,
+  onRemoveGroupItem,
+  onSubmitAnswer,
   countLabel = "asked",
 }: {
   items: AddressableItem[];
   onToggle: (id: string) => void;
+  onRemoveGroupItem?: (groupItemId: string) => void;
+  onSubmitAnswer?: (id: string, answerText: string) => void | Promise<void>;
   countLabel?: string;
 }) {
   const sorted = sortAddressable(items);
@@ -49,6 +64,34 @@ export function AddressableList({
       else next.add(id);
       return next;
     });
+  const [answering, setAnswering] = React.useState<Set<string>>(new Set());
+  const [drafts, setDrafts] = React.useState<Record<string, string>>({});
+  const [saving, setSaving] = React.useState<Set<string>>(new Set());
+  const startAnswering = (item: AddressableItem) => {
+    setDrafts((prev) => ({ ...prev, [item.id]: prev[item.id] ?? item.answerText ?? "" }));
+    setAnswering((prev) => new Set(prev).add(item.id));
+  };
+  const cancelAnswering = (id: string) =>
+    setAnswering((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  const saveAnswer = async (id: string) => {
+    const text = (drafts[id] ?? "").trim();
+    if (!text || !onSubmitAnswer) return;
+    setSaving((prev) => new Set(prev).add(id));
+    try {
+      await onSubmitAnswer(id, text);
+      cancelAnswering(id);
+    } finally {
+      setSaving((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
   let rank = 0;
 
   return (
@@ -109,15 +152,67 @@ export function AddressableList({
                       />
                     </div>
                     {expanded.has(item.id) && item.groupItems && item.groupItems.length > 0 && (
-                      <ul className="mt-2 flex flex-col gap-1.5 border-l-2 border-grey-200 pl-3">
-                        {item.groupItems.map((text, i) => (
-                          <li key={i} className="text-[13px] leading-relaxed text-grey-600">
-                            {text}
+                      <ul className="mt-2 flex flex-col gap-1 border-l-2 border-grey-200 pl-3">
+                        {item.groupItems.map((gi) => (
+                          <li key={gi.id} className="flex items-start justify-between gap-2">
+                            <span className="text-[13px] leading-relaxed text-grey-600">{gi.text}</span>
+                            {onRemoveGroupItem && (
+                              <Tooltip title="Remove from this group">
+                                <IconButton
+                                  size="small"
+                                  aria-label="Remove from this group"
+                                  onClick={() => onRemoveGroupItem(gi.id)}
+                                  sx={{ mt: -0.5, p: 0.5 }}
+                                >
+                                  <CloseRoundedIcon fontSize="inherit" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                           </li>
                         ))}
                       </ul>
                     )}
                   </>
+                )}
+                {onSubmitAnswer && (
+                  <div className="mt-2">
+                    {item.answerText && !answering.has(item.id) && (
+                      <p className="mb-1.5 rounded-(--radius-control) bg-grey-50 px-3 py-2 text-[13px] text-grey-700">
+                        {item.answerText}
+                      </p>
+                    )}
+                    {answering.has(item.id) ? (
+                      <div className="flex flex-col gap-1.5">
+                        <TextField
+                          multiline
+                          minRows={2}
+                          size="small"
+                          autoFocus
+                          placeholder="Type an answer for the submitter"
+                          value={drafts[item.id] ?? ""}
+                          onChange={(e) => setDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          sx={{ "& .MuiInputBase-input": { fontSize: 13 } }}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => saveAnswer(item.id)}
+                            disabled={!drafts[item.id]?.trim() || saving.has(item.id)}
+                          >
+                            {saving.has(item.id) ? "Saving…" : "Save answer"}
+                          </Button>
+                          <Button size="small" variant="text" onClick={() => cancelAnswering(item.id)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5 }} onClick={() => startAnswering(item)}>
+                        {item.answerText ? "Edit answer" : "Answer"}
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="flex shrink-0 flex-col items-center pl-1">

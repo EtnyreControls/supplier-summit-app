@@ -32,6 +32,8 @@ import {
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 import { toggleQuestionGroupChecked } from "@/lib/supabase/toggle-question-group";
+import { removeQuestionFromGroup } from "@/lib/supabase/remove-question-from-group";
+import { answerQuestionGroup } from "@/lib/supabase/answer-question-group";
 
 /**
  * Route: /analytics ("Analytics" in TopNav, role="analytics" only —
@@ -174,6 +176,31 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
       showToast(error, "error");
     }
   };
+
+  // Detaching a question changes group membership/counts, not just a single
+  // item's fields, so — like regroup — this re-syncs from the server rather
+  // than trying to patch local state.
+  const handleRemoveGroupItem = async (questionId: string) => {
+    const { error } = await removeQuestionFromGroup(questionId);
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+    router.refresh();
+    showToast("Removed from group");
+  };
+
+  const handleSubmitAnswer = async (groupId: string, answerText: string) => {
+    const { error } = await answerQuestionGroup(groupId, answerText);
+    if (error) {
+      showToast(error, "error");
+      return;
+    }
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === groupId ? { ...q, answerText, addressed: true, addressedAt: Date.now() } : q))
+    );
+    showToast("Answer saved");
+  };
   const toggleFeedback = (id: string) =>
     setFeedback((prev) =>
       prev.map((f) =>
@@ -265,7 +292,12 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
                     </Button>
                   }
                 />
-                <AddressableList items={questions} onToggle={toggleQuestion} />
+                <AddressableList
+                  items={questions}
+                  onToggle={toggleQuestion}
+                  onRemoveGroupItem={handleRemoveGroupItem}
+                  onSubmitAnswer={handleSubmitAnswer}
+                />
               </>
             )}
 
