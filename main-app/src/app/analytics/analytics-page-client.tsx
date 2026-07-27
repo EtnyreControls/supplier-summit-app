@@ -34,6 +34,7 @@ import { useSignOut } from "@/lib/supabase/use-sign-out";
 import { toggleQuestionGroupChecked } from "@/lib/supabase/toggle-question-group";
 import { removeQuestionFromGroup } from "@/lib/supabase/remove-question-from-group";
 import { answerQuestionGroup } from "@/lib/supabase/answer-question-group";
+import { toggleFeedbackTopicAddressed } from "@/lib/supabase/toggle-feedback-topic";
 
 /**
  * Route: /analytics ("Analytics" in TopNav, role="analytics" only —
@@ -44,8 +45,9 @@ import { answerQuestionGroup } from "@/lib/supabase/answer-question-group";
  * built from the same in-memory state, so resolving items elsewhere updates
  * it live.
  *
- * Questions are real data (question_groups, fetched in page.tsx); Feedback/
- * Voting/Polls are still mock — TODO: swap those for real queries too.
+ * Questions (question_groups) and Feedback (feedback_topics, one row per
+ * clustering run) are both real data, fetched in page.tsx; Voting/Polls are
+ * still mock — TODO: swap those for real queries too.
  */
 
 type SectionKey = "questions" | "feedback" | "voting" | "polls" | "dashboard";
@@ -56,15 +58,6 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactElement }[] =
   { key: "voting", label: "Voting", icon: <HowToVoteRoundedIcon fontSize="small" /> },
   { key: "polls", label: "Polls", icon: <PollRoundedIcon fontSize="small" /> },
   { key: "dashboard", label: "Dashboard", icon: <InsightsRoundedIcon fontSize="small" /> },
-];
-
-const INITIAL_FEEDBACK: AddressableItem[] = [
-  { id: "f1", text: "Breakout rooms ran long — Q&A got cut short twice.", count: 17, groupCount: 4, addressed: false, addressedAt: null },
-  { id: "f2", text: "Would love more hands-on demo time next year vs. slides.", count: 13, groupCount: 3, addressed: false, addressedAt: null },
-  { id: "f3", text: "Wifi in Breakout Room B was unreliable during the session.", count: 10, addressed: false, addressedAt: null },
-  { id: "f4", text: "Lunch line took 40+ minutes — consider a second station.", count: 9, groupCount: 2, addressed: false, addressedAt: null },
-  { id: "f5", text: "Loved the logistics breakout — more like this please.", count: 7, addressed: false, addressedAt: null },
-  { id: "f6", text: "Badge printer at check-in jammed twice this morning.", count: 4, addressed: true, addressedAt: 1 },
 ];
 
 const VOTE_TOPICS: VoteEntry[] = [
@@ -128,7 +121,13 @@ function addressedRate(items: AddressableItem[]) {
   return (items.filter((i) => i.addressed).length / items.length) * 100;
 }
 
-export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: AddressableItem[] }) {
+export function AnalyticsPageClient({
+  initialQuestions,
+  initialFeedback,
+}: {
+  initialQuestions: AddressableItem[];
+  initialFeedback: AddressableItem[];
+}) {
   const router = useRouter();
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
@@ -136,9 +135,8 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const [section, setSection] = React.useState<SectionKey>("questions");
   const [questions, setQuestions] = React.useState(initialQuestions);
-  const [feedback, setFeedback] = React.useState(INITIAL_FEEDBACK);
+  const [feedback, setFeedback] = React.useState(initialFeedback);
   const [regrouping, setRegrouping] = React.useState(false);
-  const clockRef = React.useRef(10);
 
   // Regrouping (merging near-duplicate questions) changes which ids exist,
   // so it can't be applied as a local optimistic patch like toggleQuestion
@@ -146,6 +144,10 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
   React.useEffect(() => {
     setQuestions(initialQuestions);
   }, [initialQuestions]);
+
+  React.useEffect(() => {
+    setFeedback(initialFeedback);
+  }, [initialFeedback]);
 
   const handleRegroup = async () => {
     setRegrouping(true);
@@ -201,12 +203,21 @@ export function AnalyticsPageClient({ initialQuestions }: { initialQuestions: Ad
     );
     showToast("Answer saved");
   };
-  const toggleFeedback = (id: string) =>
+  const toggleFeedback = async (id: string) => {
+    const current = feedback.find((f) => f.id === id);
+    if (!current) return;
+    const nextAddressed = !current.addressed;
+
     setFeedback((prev) =>
-      prev.map((f) =>
-        f.id === id ? { ...f, addressed: !f.addressed, addressedAt: f.addressed ? null : clockRef.current++ } : f
-      )
+      prev.map((f) => (f.id === id ? { ...f, addressed: nextAddressed, addressedAt: nextAddressed ? Date.now() : null } : f))
     );
+
+    const { error } = await toggleFeedbackTopicAddressed(id, nextAddressed);
+    if (error) {
+      setFeedback((prev) => prev.map((f) => (f.id === id ? current : f)));
+      showToast(error, "error");
+    }
+  };
 
   const questionsOpen = questions.filter((q) => !q.addressed).length;
   const feedbackOpen = feedback.filter((f) => !f.addressed).length;

@@ -23,6 +23,15 @@ type QuestionGroupRow = {
   questions: { question_id: string; submission_info: string | null }[] | null;
 };
 
+type FeedbackTopicRow = {
+  topic_id: string;
+  label: string;
+  summary: string;
+  addressed: boolean;
+  addressed_at: string | null;
+  feedback_topic_items: { item_id: string; raw_text: string }[] | null;
+};
+
 export default async function AnalyticsPage() {
   const supabase = await createClient();
 
@@ -77,5 +86,37 @@ export default async function AnalyticsPage() {
     };
   });
 
-  return <AnalyticsPageClient initialQuestions={initialQuestions} />;
+  const { data: latestRun } = await supabase
+    .from("feedback_topic_runs")
+    .select("run_id")
+    .order("cached_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: topicRows } = latestRun
+    ? await supabase
+        .from("feedback_topics")
+        .select("topic_id, label, summary, addressed, addressed_at, feedback_topic_items(item_id, raw_text)")
+        .eq("run_id", latestRun.run_id)
+        .returns<FeedbackTopicRow[]>()
+    : { data: null };
+
+  // Feedback has no per-attendee identity to rank by (responses are
+  // anonymous), so unlike Questions, "count" here is topic size — how many
+  // raw responses clustered into this theme — same number nlp-service
+  // already surfaces as item_count in FeedbackTopics.
+  const initialFeedback: AddressableItem[] = (topicRows ?? []).map((row) => {
+    const groupCount = row.feedback_topic_items?.length ?? 0;
+    return {
+      id: row.topic_id,
+      text: row.summary || row.label,
+      count: groupCount,
+      groupCount: groupCount > 1 ? groupCount : undefined,
+      groupItems: (row.feedback_topic_items ?? []).map((i) => ({ id: i.item_id, text: i.raw_text })),
+      addressed: row.addressed,
+      addressedAt: row.addressed_at ? new Date(row.addressed_at).getTime() : null,
+    };
+  });
+
+  return <AnalyticsPageClient initialQuestions={initialQuestions} initialFeedback={initialFeedback} />;
 }
