@@ -2,7 +2,6 @@
 import * as React from "react";
 import Link from "next/link";
 import IconButton from "@mui/material/IconButton";
-import Avatar from "@mui/material/Avatar";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -33,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "about", label: "About us", href: "/#about" },
   { key: "agenda", label: "Agenda & speakers", href: "/agenda" },
   { key: "polls", label: "Polls & feedback", href: "/polls" },
+  { key: "questions", label: "My questions", href: "/questions" },
   { key: "growth-machine", label: "Growth Machine", href: "/growth-machine" },
 ];
 
@@ -81,14 +81,16 @@ export function TopNav({
     })();
   }, []);
 
-  const navItems = isAnalytics ? [...NAV_ITEMS, ANALYTICS_NAV_ITEM] : NAV_ITEMS;
+  // Analytics-role users are staff, not attendees — "My questions" (their
+  // own submitted Q&A) doesn't apply to them, so it's swapped out for the
+  // Analytics section instead of just appending onto the attendee nav.
+  const navItems = isAnalytics
+    ? [...NAV_ITEMS.filter((item) => item.key !== "questions"), ANALYTICS_NAV_ITEM]
+    : NAV_ITEMS;
 
   return (
     <header className="sticky top-0 z-40 border-b border-grey-200 bg-grey-50 shadow-sm">
-      {/* Narrower left/right inset than CONTAINER below `lg:` — the hamburger +
-          logo need to sit closer to the screen edge on mobile than the rest
-          of the page's content column. */}
-      <div className="mx-auto flex h-16 w-[92%] max-w-[1400px] items-center gap-2 px-1 lg:px-10">
+      <div className="flex h-16 w-full items-center gap-2 px-4">
         <IconButton
           aria-label="Open menu"
           className="md:hidden"
@@ -122,7 +124,11 @@ export function TopNav({
             );
           })}
         </nav>
-        <div className="ml-3 flex shrink-0 items-center gap-1.5 md:ml-0 md:gap-3">
+        {/* Nav above is `hidden` (display:none, no layout contribution) below
+            `md:`, so on mobile this spacer is what pushes the icon cluster to
+            the right edge; at `md:` it hides and the nav's own flex-1 takes over. */}
+        <div className="flex-1 md:hidden" />
+        <div className="flex shrink-0 items-center gap-1.5 md:gap-3">
           <ModeToggle size="small" />
           <IconButton
             aria-label="My badge QR"
@@ -135,7 +141,7 @@ export function TopNav({
           </IconButton>
 
           <IconButton aria-label="Profile menu" size="small" data-tour="profile" onClick={(e) => setAnchor(e.currentTarget)}>
-            <Avatar sx={{ width: 42, height: 42, fontSize: 15 }}>{initials}</Avatar>
+            <PersonRoundedIcon fontSize="small" />
           </IconButton>
         </div>
 

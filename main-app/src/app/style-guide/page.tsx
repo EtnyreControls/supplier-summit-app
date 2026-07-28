@@ -189,6 +189,7 @@ export default function StyleGuide() {
             time="10:30 – 11:15 AM"
             location="Main hall"
             live
+            featured
             onClick={() => showToast("Session details", "info")}
           />
           <SpeakerCard

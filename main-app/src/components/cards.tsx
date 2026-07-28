@@ -7,26 +7,36 @@ import Avatar from "@mui/material/Avatar";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 
-/** Agenda session. `live` renders the yellow "Live now" chip. */
+/** Agenda session. `live` renders the amber "Live now" chip (distinct from
+ * primary yellow, so it doesn't compete with actual call-to-action buttons).
+ * `featured` marks a must-see/keynote session with an amber edge + eyebrow,
+ * so it stands out from the general schedule at a glance. */
 export function SessionCard({
   title,
   time,
   location,
   live,
+  featured,
   onClick,
 }: {
   title: string;
   time: string;
   location: string;
   live?: boolean;
+  featured?: boolean;
   onClick?: () => void;
 }) {
   return (
-    <Card>
+    <Card className={featured ? "border-l-4 !border-l-amber-500" : ""}>
       <CardActionArea onClick={onClick} className="p-4">
+        {featured && (
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-widest text-amber-700">Keynote</p>
+        )}
         <div className="flex items-start justify-between gap-3">
           <p className="text-[15px] font-semibold leading-snug text-ink">{title}</p>
-          {live && <Chip size="small" color="primary" label="Live now" />}
+          {live && (
+            <Chip size="small" label="Live now" sx={{ backgroundColor: "var(--color-amber-500)", color: "#fff" }} />
+          )}
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-grey-600">
           <span className="inline-flex items-center gap-1">

@@ -34,6 +34,11 @@ export default function QrLandingPage() {
           router.push("/welcome");
           router.refresh();
           return;
+        case "redirect_login":
+          setStatus("done");
+          setMessage("This badge is already signed in elsewhere — please log in with your PIN.");
+          router.push("/login");
+          return;
         case "self":
           setStatus("done");
           setMessage("That's your own badge.");

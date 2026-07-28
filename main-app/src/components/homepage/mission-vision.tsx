@@ -132,11 +132,16 @@ function HexHalfStatic({
   const flatPad = widthPx * 0.08;
   const textStyle: React.CSSProperties =
     point === "left" ? { paddingLeft: pointPad, paddingRight: flatPad } : { paddingRight: pointPad, paddingLeft: flatPad };
+  /* Amber inset accent on the pointed side — clipped to the hexagon shape
+     along with everything else, so it traces the point instead of just
+     sitting as a flat line. Adds a second accent to the card without
+     touching the yellow/grey fill itself. */
+  const amberEdge = point === "left" ? "inset 3px 0 0 var(--color-amber-500)" : "inset -3px 0 0 var(--color-amber-500)";
 
   return (
     <div
       className={`flex flex-col justify-center py-12 ${toneClasses(tone)} ${className}`}
-      style={{ clipPath: hexHalfClip(point), width: widthPx, ...textStyle }}
+      style={{ clipPath: hexHalfClip(point), width: widthPx, boxShadow: amberEdge, ...textStyle }}
     >
       <span className="mb-2 text-xs font-bold uppercase tracking-widest opacity-60">
         {statement.label}
