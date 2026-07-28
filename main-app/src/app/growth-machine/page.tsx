@@ -3,7 +3,16 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import ConstructionRoundedIcon from "@mui/icons-material/ConstructionRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
-import { PageContainer, SectionHeader, TopNav, NavLogo, useToast, useProfileModal, useBadgeQrModal } from "@/components";
+import {
+  PageContainer,
+  SectionHeader,
+  TopNav,
+  NavLogo,
+  ChipspreaderMarquee,
+  useToast,
+  useProfileModal,
+  useBadgeQrModal,
+} from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 
 /**
@@ -49,7 +58,7 @@ function RoleCard({
       aria-pressed={selected}
       className={`flex h-[132px] w-[132px] flex-col items-center justify-center gap-2 rounded-(--radius-card) border-2 transition-colors sm:h-[150px] sm:w-[150px] ${
         selected
-          ? "border-yellow bg-yellow-tint"
+          ? "border-green bg-green-tint"
           : "border-grey-200 bg-surface hover:border-grey-400"
       }`}
     >
@@ -64,6 +73,14 @@ export default function GrowthMachinePage() {
   const { profileModal, openProfile } = useProfileModal();
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const router = useRouter();
+  const [selectedRole, setSelectedRole] = React.useState<Role | null>(null);
+
+  const chooseRole = (role: Role) => {
+    setSelectedRole(role);
+    // Brief pause so the green "answered" state is visible before the
+    // board route takes over.
+    setTimeout(() => router.push(`/growth-machine/board?role=${role}`), 180);
+  };
 
   return (
     <div className="min-h-dvh bg-background">
@@ -81,8 +98,8 @@ export default function GrowthMachinePage() {
         <div className="flex flex-col items-center gap-8 py-6 sm:flex-row sm:justify-center sm:gap-14">
           <RoleCard
             role={ROLES[0]}
-            selected={false}
-            onSelect={() => router.push(`/growth-machine/board?role=${ROLES[0].id}`)}
+            selected={selectedRole === ROLES[0].id}
+            onSelect={() => chooseRole(ROLES[0].id)}
           />
 
           <div className="hidden flex-col items-center gap-2 sm:flex">
@@ -93,8 +110,8 @@ export default function GrowthMachinePage() {
 
           <RoleCard
             role={ROLES[1]}
-            selected={false}
-            onSelect={() => router.push(`/growth-machine/board?role=${ROLES[1].id}`)}
+            selected={selectedRole === ROLES[1].id}
+            onSelect={() => chooseRole(ROLES[1].id)}
           />
         </div>
 
@@ -107,6 +124,8 @@ export default function GrowthMachinePage() {
             {ROLES[1].label}
           </p>
         </div>
+
+        <ChipspreaderMarquee />
       </PageContainer>
       {toast}
       {profileModal}
