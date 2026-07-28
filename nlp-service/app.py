@@ -29,7 +29,7 @@ from sample_feedback import SAMPLE_FEEDBACK
 load_dotenv()
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-EMBEDDING_MODEL_NAME = "sentence-transformers/multi-qa-mpnet-base-dot-v1"
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
 SUMMARIZATION_MODEL_NAME = "facebook/bart-large-cnn"
 ANSWERS_TABLE = "feedback_answers"
 RUNS_TABLE = "feedback_topic_runs"
@@ -40,23 +40,15 @@ TOPIC_ITEMS_TABLE = "feedback_topic_items"
 # since there's no real row to link to.
 FeedbackItem = tuple[Optional[str], str]
 
-# HDBSCAN requires enough densely-packed items to form a cluster at all, so
-# small batches (an event with only a handful of feedback items) always came
-# back as noise. A distance threshold merges items greedily up to a cosine-
-# distance cutoff instead, which works the same way at any batch size —
-# including N=1 or N=2 — with no minimum-density requirement.
-DISTANCE_THRESHOLD = 0.3
-
 QUESTION_GROUPS_TABLE = "question_groups"
 QUESTIONS_TABLE = "questions"
 # Questions need a model tuned for query/question *intent* matching (trained
 # on question-answer pairs) rather than general sentence similarity — two
 # attendees can phrase the same question totally differently ("will there be
-# a recording?" vs "can I watch this later?"), which a surface-wording model
-# like EMBEDDING_MODEL_NAME would miss. This happens to name the same
-# underlying model as Feedback's today, but it's kept as its own constant
-# and its own loader (get_questions_embedding_model) so the two pipelines
-# stay independently swappable and never get consolidated into one.
+# a recording?" vs "can I watch this later?"), which a general-purpose model
+# like EMBEDDING_MODEL_NAME would miss. Kept as its own constant and its own
+# loader (get_questions_embedding_model) so the two pipelines stay
+# independently swappable and never get consolidated into one.
 QUESTIONS_EMBEDDING_MODEL = "sentence-transformers/multi-qa-mpnet-base-dot-v1"
 # Grouping Questions is near-duplicate detection ("is this the same question
 # as that one"), not thematic clustering — so clustering algorithms are the
@@ -171,7 +163,7 @@ def load_feedback(supabase: Optional[Client]) -> list[FeedbackItem]:
 
 def build_topic_model(n_docs: int):
     from bertopic import BERTopic
-    from sklearn.cluster import AgglomerativeClustering
+    from sklearn.feature_extraction.text import CountVectorizer
     from umap import UMAP
 
     # BERTopic's defaults (min_topic_size=10, UMAP n_neighbors=15) assume a
@@ -188,36 +180,44 @@ def build_topic_model(n_docs: int):
         metric="cosine",
         random_state=42,
     )
-    # BERTopic accepts any clustering model exposing .fit()/.labels_ via the
-    # hdbscan_model param, despite the name — see DISTANCE_THRESHOLD above
-    # for why agglomerative clustering replaced HDBSCAN here. Items whose
-    # nearest merge exceeds DISTANCE_THRESHOLD are left as their own
-    # singleton cluster rather than forced into an unrelated one — the
-    # default behavior once distance_threshold is set with n_clusters=None.
-    clustering_model = AgglomerativeClustering(
-        n_clusters=None,
-        metric="cosine",
-        linkage="average",
-        distance_threshold=DISTANCE_THRESHOLD,
-    )
 
+    # c-TF-IDF (which docs get treated as "close to" a topic, including
+    # which ones qualify as representative_docs_ — see topic_label) is
+    # otherwise dominated by stopwords like "the"/"was"/"during", since
+    # feedback sentences are short enough that a couple of stopwords can
+    # outweigh the actual content words.
+    vectorizer_model = CountVectorizer(stop_words="english")
+
+    # No hdbscan_model override — uses BERTopic's built-in HDBSCAN clustering
+    # with default settings. Note: HDBSCAN needs enough densely-packed items
+    # to form a cluster at all, so small batches (an event with only a
+    # handful of feedback items) can land entirely in the -1 "noise" bucket.
     return BERTopic(
         embedding_model=get_embedding_model(),
         umap_model=umap_model,
-        hdbscan_model=clustering_model,
+        vectorizer_model=vectorizer_model,
         min_topic_size=min_topic_size,
         calculate_probabilities=False,
         verbose=False,
     )
 
 
-def topic_label(bertopic_name: str) -> str:
-    # BERTopic names topics like "0_wifi_signal_connection_room" — drop the
-    # leading id (BERTopic's numeric id isn't stored — each run gets fresh
-    # DB rows, see feedback_topics) and title-case the rest.
-    _, _, rest = bertopic_name.partition("_")
-    words = [w for w in rest.split("_") if w]
-    return " ".join(w.capitalize() for w in words) if words else bertopic_name
+def topic_label(representative_docs: list[str]) -> str:
+    # BERTopic's auto-generated Name (top c-TF-IDF words strung together,
+    # e.g. "0_wifi_signal_connection_room") reads as keyword salad, not a
+    # label — and a short BART generation with a tight max_length just
+    # truncates mid-sentence instead of producing a real headline. A real
+    # attendee sentence is grammatical and on-topic by construction, so pick
+    # the shortest of BERTopic's representative docs (the real items closest
+    # to the topic's centroid) as the label instead of generating one.
+    if not representative_docs:
+        return "General feedback"
+
+    label = min(representative_docs, key=len).strip()
+    max_len = 90
+    if len(label) > max_len:
+        label = label[:max_len].rsplit(" ", 1)[0].rstrip(",.;:—-") + "…"
+    return label
 
 
 def summarize_topic(items: list[str]) -> str:
@@ -261,9 +261,10 @@ def run_pipeline(supabase: Optional[Client]) -> list[dict[str, Any]]:
         if topic_id == -1:
             continue
         items = items_by_topic.get(topic_id, [])
+        representative_docs = topic_model.get_representative_docs(topic_id) or []
         topics.append(
             {
-                "label": topic_label(row["Name"]),
+                "label": topic_label(representative_docs),
                 "summary": summarize_topic([text for _, text in items]),
                 "items": items,
             }

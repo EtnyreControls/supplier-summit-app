@@ -28,6 +28,7 @@ import {
   FeedbackTopics,
   type PollOption,
   type AddressableItem,
+  type FeedbackTopicsResponse,
   type VoteEntry,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
@@ -48,6 +49,11 @@ import { toggleFeedbackTopicAddressed } from "@/lib/supabase/toggle-feedback-top
  * Questions (question_groups) and Feedback (feedback_topics, one row per
  * clustering run) are both real data, fetched in page.tsx; Voting/Polls are
  * still mock — TODO: swap those for real queries too.
+ *
+ * Feedback used to be two stacked lists (a raw AddressableList plus a
+ * FeedbackTopics browse view) rendering the same feedback_topics rows twice.
+ * FeedbackTopics is now the single worklist — it owns the addressed
+ * checkbox itself, same as AddressableList does for Questions.
  */
 
 type SectionKey = "questions" | "feedback" | "voting" | "polls" | "dashboard";
@@ -116,17 +122,17 @@ const POLLS: AnalyticsPoll[] = [
   },
 ];
 
-function addressedRate(items: AddressableItem[]) {
+function addressedRate(items: { addressed: boolean }[]) {
   if (items.length === 0) return 0;
   return (items.filter((i) => i.addressed).length / items.length) * 100;
 }
 
 export function AnalyticsPageClient({
   initialQuestions,
-  initialFeedback,
+  initialFeedbackTopics,
 }: {
   initialQuestions: AddressableItem[];
-  initialFeedback: AddressableItem[];
+  initialFeedbackTopics: FeedbackTopicsResponse;
 }) {
   const router = useRouter();
   const { toast, showToast } = useToast();
@@ -135,7 +141,7 @@ export function AnalyticsPageClient({
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const [section, setSection] = React.useState<SectionKey>("questions");
   const [questions, setQuestions] = React.useState(initialQuestions);
-  const [feedback, setFeedback] = React.useState(initialFeedback);
+  const [feedbackTopics, setFeedbackTopics] = React.useState(initialFeedbackTopics);
   const [regrouping, setRegrouping] = React.useState(false);
 
   // Regrouping (merging near-duplicate questions) changes which ids exist,
@@ -146,8 +152,8 @@ export function AnalyticsPageClient({
   }, [initialQuestions]);
 
   React.useEffect(() => {
-    setFeedback(initialFeedback);
-  }, [initialFeedback]);
+    setFeedbackTopics(initialFeedbackTopics);
+  }, [initialFeedbackTopics]);
 
   const handleRegroup = async () => {
     setRegrouping(true);
@@ -203,24 +209,31 @@ export function AnalyticsPageClient({
     );
     showToast("Answer saved");
   };
-  const toggleFeedback = async (id: string) => {
-    const current = feedback.find((f) => f.id === id);
-    if (!current) return;
-    const nextAddressed = !current.addressed;
+  const toggleFeedbackTopic = async (topicId: string, nextAddressed: boolean) => {
+    const current = feedbackTopics.topics.find((t) => t.topic_id === topicId);
+    if (!current) return { error: null };
 
-    setFeedback((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, addressed: nextAddressed, addressedAt: nextAddressed ? Date.now() : null } : f))
-    );
+    setFeedbackTopics((prev) => ({
+      ...prev,
+      topics: prev.topics.map((t) =>
+        t.topic_id === topicId
+          ? { ...t, addressed: nextAddressed, addressed_at: nextAddressed ? new Date().toISOString() : null }
+          : t
+      ),
+    }));
 
-    const { error } = await toggleFeedbackTopicAddressed(id, nextAddressed);
+    const { error } = await toggleFeedbackTopicAddressed(topicId, nextAddressed);
     if (error) {
-      setFeedback((prev) => prev.map((f) => (f.id === id ? current : f)));
-      showToast(error, "error");
+      setFeedbackTopics((prev) => ({
+        ...prev,
+        topics: prev.topics.map((t) => (t.topic_id === topicId ? current : t)),
+      }));
     }
+    return { error };
   };
 
   const questionsOpen = questions.filter((q) => !q.addressed).length;
-  const feedbackOpen = feedback.filter((f) => !f.addressed).length;
+  const feedbackOpen = feedbackTopics.topics.filter((t) => !t.addressed).length;
 
   return (
     <div className="min-h-dvh bg-background">
@@ -314,11 +327,13 @@ export function AnalyticsPageClient({
 
             {section === "feedback" && (
               <>
-                <SectionHeader eyebrow={`${feedbackOpen} open`} title="Session feedback" />
-                <AddressableList items={feedback} onToggle={toggleFeedback} countLabel="flags" />
-
-                <SectionHeader eyebrow="Auto-clustered" title="Feedback Topics" />
-                <FeedbackTopics showToast={showToast} />
+                <SectionHeader eyebrow={`${feedbackOpen} open`} title="Feedback topics" />
+                <FeedbackTopics
+                  data={feedbackTopics}
+                  onToggleAddressed={toggleFeedbackTopic}
+                  onRefreshed={setFeedbackTopics}
+                  showToast={showToast}
+                />
               </>
             )}
 
@@ -349,7 +364,10 @@ export function AnalyticsPageClient({
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <StatCard value="486" label="Badges checked in" />
-                  <StatCard value={String(questions.length + feedback.length)} label="Submissions today" />
+                  <StatCard
+                    value={String(questions.length + feedbackTopics.topics.length)}
+                    label="Submissions today"
+                  />
                   <StatCard value="79%" label="Poll participation" />
                   <StatCard value="4.4 / 5" label="Avg. session rating" />
                 </div>
@@ -357,7 +375,7 @@ export function AnalyticsPageClient({
                 <SectionHeader eyebrow="Follow-up" title="Resolution progress" />
                 <div className="flex flex-col gap-4 rounded-(--radius-card) border border-grey-200 bg-surface p-4">
                   <LabeledProgress label="Questions addressed" value={addressedRate(questions)} />
-                  <LabeledProgress label="Feedback reviewed" value={addressedRate(feedback)} />
+                  <LabeledProgress label="Feedback reviewed" value={addressedRate(feedbackTopics.topics)} />
                 </div>
 
                 <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
