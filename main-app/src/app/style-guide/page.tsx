@@ -52,10 +52,10 @@ import { useSignOut } from "@/lib/supabase/use-sign-out";
  * currently in.
  */
 const swatches: Array<{ name: string; hex: string; darkHex: string; note?: string }> = [
-  { name: "Yellow", hex: tokens.yellow, darkHex: "#F0E54C", note: "primary — ink text only" },
-  { name: "Yellow hover", hex: tokens.yellowHover, darkHex: "#EDDF1D" },
+  { name: "Yellow", hex: tokens.yellow, darkHex: "#E6D600", note: "primary — ink text only" },
+  { name: "Yellow hover", hex: tokens.yellowHover, darkHex: "#CCBE00" },
   { name: "Yellow pressed", hex: tokens.yellowPressed, darkHex: tokens.yellowPressed, note: "unchanged in dark mode" },
-  { name: "Yellow tint", hex: tokens.yellowTint, darkHex: "#2B2703", note: "banners" },
+  { name: "Yellow tint", hex: tokens.yellowTint, darkHex: "#201F1C", note: "banners — matches nav bar shade" },
   { name: "On-yellow", hex: tokens.onYellow, darkHex: tokens.onYellow, note: "content on yellow — never flips" },
   { name: "Ink", hex: tokens.ink, darkHex: "#E2E2E2", note: "text" },
   { name: "Secondary accent", hex: tokens.secondaryAccent, darkHex: "#5A5A60", note: "dark-mode-palette.css — distinct from ink" },

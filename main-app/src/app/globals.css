@@ -57,10 +57,18 @@
 .dark {
   color-scheme: dark;
 
-  /* dark-mode-palette.css / dark-mode-palette (1).css handoff, 1:1 swap */
-  --summit-yellow: #f0e54c;
-  --summit-yellow-hover: #eddf1d;
-  --summit-yellow-tint: #2b2703;
+  /* dark-mode-palette.css / dark-mode-palette (1).css handoff, 1:1 swap,
+     except --summit-yellow/-hover: the handoff's #f0e54c was desaturated
+     (S 84%, L 62%) relative to the brand yellow's full saturation, which
+     read as muddy/olive rather than a clean yellow against dark surfaces.
+     Same hue (56°), restored to full saturation and darkened instead of
+     desaturated — reads as a crisp, cooler yellow instead of muted/warm. */
+  --summit-yellow: #e6d600;
+  --summit-yellow-hover: #ccbe00;
+  /* Fully desaturated, matched exactly to the nav bar's shade
+     (--summit-surface / bg-grey-50, #201f1c) rather than an arbitrary
+     grey — the handoff's #2b2703 read as warm brown. */
+  --summit-yellow-tint: #201f1c;
   --summit-secondary-accent: #5a5a60;
 
   --summit-ink: #e2e2e2;
@@ -215,6 +223,7 @@ html {
 .summit-flip-card-back {
   transform: rotateY(180deg);
 }
+
 @media (prefers-reduced-motion: reduce) {
   .summit-flip-card-inner {
     transition: none;

@@ -81,7 +81,11 @@ const theme = createTheme({
       palette: {
         // dark-mode-palette.css / dark-mode-palette (1).css handoff, 1:1 swap
         // (mirrors globals.css's .dark block — see there for the full ramp).
-        primary: { main: "#F0E54C", dark: tokens.yellowPressed, light: "#2B2703", contrastText: tokens.onYellow },
+        // main: full-saturation cooler yellow, not the handoff's muted/olive
+        // #F0E54C; light (tint): matched to the nav bar's shade, not the
+        // handoff's warm brown #2B2703 — see globals.css's --summit-yellow(-tint)
+        // comments for why.
+        primary: { main: "#E6D600", dark: tokens.yellowPressed, light: "#201F1C", contrastText: tokens.onYellow },
         secondary: { main: "#E2E2E2", contrastText: tokens.ink },
         error: { main: tokens.amber[300], dark: "#FBA94C", light: "#3B2A14", contrastText: tokens.ink },
         warning: { main: tokens.amber[300], dark: "#FBA94C", light: "#3B2A14", contrastText: tokens.ink },
