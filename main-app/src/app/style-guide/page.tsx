@@ -40,6 +40,7 @@ import {
   FeedbackStepper,
   ModeToggle,
   NavLogo,
+  MyQuestionsList,
 } from "@/components";
 import { tokens } from "@/theme/theme";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
@@ -232,6 +233,31 @@ export default function StyleGuide() {
           upvoted={upvoted}
           onToggleUpvote={() => setUpvoted((u) => !u)}
           groupCount={4}
+        />
+
+        <SectionHeader eyebrow="Domain" title="My questions" />
+        <MyQuestionsList
+          questions={[
+            {
+              id: "sg-1",
+              text: "Will the new coating line affect lead times for Q4 orders?",
+              status: "answered",
+              answerText:
+                "Short-term yes — expect +1 week through October while the line is validated. Revised lead times per part family after the summit.",
+            },
+            {
+              id: "sg-2",
+              text: "Is there a plan to standardize packaging specs across divisions?",
+              status: "answered",
+              answerText: "Yes — a cross-division spec is in draft; supplier review starts Q1.",
+            },
+            {
+              id: "sg-3",
+              text: "Can we get forecast data shared quarterly instead of annually?",
+              status: "pending",
+              answerText: null,
+            },
+          ]}
         />
 
         <SectionHeader eyebrow="Domain" title="Contact sharing" />
