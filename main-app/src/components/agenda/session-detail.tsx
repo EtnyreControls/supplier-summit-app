@@ -27,7 +27,14 @@ export function SessionDetail({
 }) {
   return (
     <Card className="p-5 lg:p-6">
-      {session.live && <Chip size="small" color="primary" label="Live now" className="mb-2" />}
+      {session.live && (
+        <Chip
+          size="small"
+          label="Live now"
+          className="mb-2"
+          sx={{ backgroundColor: "var(--color-amber-500)", color: "#fff" }}
+        />
+      )}
       <h3 className="text-xl font-bold text-ink">{session.title}</h3>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-grey-600">
         <span className="inline-flex items-center gap-1">

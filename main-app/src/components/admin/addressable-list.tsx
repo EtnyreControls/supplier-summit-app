@@ -145,6 +145,11 @@ export function AddressableList({
                           />
                         }
                         label={`${item.groupCount} similar`}
+                        sx={{
+                          backgroundColor: "var(--color-amber-100)",
+                          color: "var(--color-amber-900)",
+                          "& .MuiChip-icon": { color: "var(--color-amber-900)" },
+                        }}
                       />
                       <AiTag
                         label="Grouped by AI"

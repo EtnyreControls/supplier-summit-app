@@ -5,7 +5,6 @@ import Tab from "@mui/material/Tab";
 import TextField from "@mui/material/TextField";
 import HowToVoteRoundedIcon from "@mui/icons-material/HowToVoteRounded";
 import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
-import QuestionAnswerRoundedIcon from "@mui/icons-material/QuestionAnswerRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import {
   PageContainer,
@@ -16,20 +15,18 @@ import {
   Banner,
   EmptyState,
   FeedbackStepper,
-  MyQuestionsList,
   useToast,
   useProfileModal,
   useBadgeQrModal,
   type PollOption,
-  type SubmittedQuestion,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 import { submitFeedback } from "@/lib/supabase/submit-feedback";
 
 /**
- * Three tabs: Polls (scheduled + anytime, both rendered with the shared
- * PollCard), Feedback (closing pulse stepper), and My questions (the
- * attendee's own submitted Q&A, fetched server-side in page.tsx).
+ * Two tabs: Polls (scheduled + anytime, both rendered with the shared
+ * PollCard) and Feedback (closing pulse stepper). "My questions" lives at
+ * its own route (/questions) rather than as a tab here.
  *
  * - Scheduled polls are tied to a specific agenda session and stay
  *   `locked` (see polls.tsx) until that session starts, then behave like
@@ -41,12 +38,11 @@ import { submitFeedback } from "@/lib/supabase/submit-feedback";
  * once wired up; scheduled unlock/close should move server-side too.
  */
 
-type SectionKey = "polls" | "feedback" | "questions";
+type SectionKey = "polls" | "feedback";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ReactElement }[] = [
   { key: "polls", label: "Polls", icon: <HowToVoteRoundedIcon fontSize="small" /> },
   { key: "feedback", label: "Feedback", icon: <RateReviewRoundedIcon fontSize="small" /> },
-  { key: "questions", label: "My questions", icon: <QuestionAnswerRoundedIcon fontSize="small" /> },
 ];
 
 type ScheduledStatus = "closed" | "live" | "locked";
@@ -153,7 +149,7 @@ function withVote(options: PollOption[], votedId: string | null | undefined) {
   return options.map((o) => (o.id === votedId ? { ...o, votes: o.votes + 1 } : o));
 }
 
-export function PollsPageClient({ initialQuestions }: { initialQuestions: SubmittedQuestion[] }) {
+export function PollsPageClient() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
@@ -310,21 +306,6 @@ export function PollsPageClient({ initialQuestions }: { initialQuestions: Submit
                   )
                 }
               </FeedbackStepper>
-            )}
-          </>
-        )}
-
-        {section === "questions" && (
-          <>
-            <SectionHeader eyebrow={`${initialQuestions.length} submitted`} title="My questions" />
-            {initialQuestions.length === 0 ? (
-              <EmptyState
-                icon={<QuestionAnswerRoundedIcon sx={{ fontSize: 32 }} />}
-                title="No questions yet"
-                body="Use the “Ask a question” button anywhere in the app to submit one — it'll show up here."
-              />
-            ) : (
-              <MyQuestionsList questions={initialQuestions} />
             )}
           </>
         )}

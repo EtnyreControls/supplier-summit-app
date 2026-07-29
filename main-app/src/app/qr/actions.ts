@@ -41,6 +41,7 @@ export async function getMyBadgeQrToken() {
 
 type ScanResult =
   | { mode: "login"; error: string | null }
+  | { mode: "redirect_login" }
   | { mode: "self" }
   | { mode: "contact"; contact: { name: string; company: string | null } }
   | { mode: "error"; error: string };
@@ -50,8 +51,13 @@ type ScanResult =
  *
  * One token, two behaviors, chosen by the SCANNING DEVICE's session state
  * (never by which QR it is, since there's only one per user):
- *   - No active session -> this is a self-login (kiosk / fresh device
- *     scanning your own badge).
+ *   - No active session, and the badge owner has no active session
+ *     elsewhere either -> this is a self-login (kiosk / fresh device
+ *     scanning your own badge for the first time).
+ *   - No active session, but the badge owner already has one running
+ *     somewhere -> don't trust it. A photo of a badge QR would otherwise
+ *     be a standing, reusable credential; bounce to /login so a second
+ *     party replaying a captured QR needs the owner's actual PIN.
  *   - Active session, different user -> don't touch the session. Save the
  *     badge owner's opted-in contact fields into the scanner's contacts.
  *   - Active session, same user -> no-op (you scanned your own badge while
@@ -78,6 +84,16 @@ export async function handleQrScan(token: string): Promise<ScanResult> {
   } = await supabase.auth.getUser();
 
   if (!currentUser) {
+    const { data: ownerHasSession, error: sessionCheckError } = await admin.rpc("has_active_session", {
+      p_user_id: scannedUserId,
+    });
+    if (sessionCheckError) {
+      return { mode: "error", error: "Could not verify badge" };
+    }
+    if (ownerHasSession) {
+      return { mode: "redirect_login" };
+    }
+
     const { error } = await mintSessionForUser(scannedUserId);
     return { mode: "login", error };
   }

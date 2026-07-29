@@ -127,6 +127,18 @@ const theme = createTheme({
               },
             },
             {
+              // Ghost (text) buttons must never render in brand yellow —
+              // yellow text on the page/surface background fails contrast.
+              // MUI defaults color to "primary" when a call site omits it,
+              // so a bare <Button variant="text"> would come out yellow;
+              // remap it to the same ink treatment as the secondary ghost.
+              props: { variant: "text", color: "primary" },
+              style: {
+                color: v.ink,
+                "&:hover": { backgroundColor: v.grey(100) },
+              },
+            },
+            {
               props: { variant: "outlined", color: "secondary" },
               style: {
                 borderColor: v.grey(300),

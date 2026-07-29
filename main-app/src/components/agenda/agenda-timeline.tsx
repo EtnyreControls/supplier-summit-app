@@ -57,7 +57,14 @@ export function AgendaTimeline({
             >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <p className="text-[15px] font-semibold text-ink">{s.title}</p>
-                {s.live && <Chip size="small" color="primary" label="Live" className="shrink-0" />}
+                {s.live && (
+                  <Chip
+                    size="small"
+                    label="Live"
+                    className="shrink-0"
+                    sx={{ backgroundColor: "var(--color-amber-500)", color: "#fff" }}
+                  />
+                )}
               </div>
               <p className="mt-0.5 truncate text-[13px] text-grey-600">
                 {s.time} · {s.location}

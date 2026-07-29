@@ -300,7 +300,8 @@ export function AnalyticsPageClient({
                   title="Submitted questions"
                   action={
                     <Button
-                      variant="outlined"
+                      variant="contained"
+                      color="primary"
                       size="small"
                       onClick={handleRegroup}
                       disabled={regrouping}
