@@ -115,22 +115,27 @@ export function JourneyRoadmap({ milestones = DEFAULT_MILESTONES }: { milestones
               }}
             >
               <HexPin number={i + 1} active={active} />
-              <div className="w-[150px] rounded-(--radius-card) border border-grey-200 bg-surface px-3 py-2.5 shadow-sm sm:w-[168px]">
-                <p className="text-[12px] font-bold leading-none text-ink sm:text-[13px]">{m.year}</p>
-                <p className="mt-1.5 text-[12px] font-semibold leading-snug text-ink sm:text-[13px]">{m.title}</p>
-                <p className="mt-1 hidden text-[12px] leading-relaxed text-grey-600 sm:block">{m.copy}</p>
+              <div className="hidden w-[168px] rounded-(--radius-card) border border-grey-200 bg-surface px-3 py-2.5 shadow-sm sm:block">
+                <p className="text-[13px] font-bold leading-none text-ink">{m.year}</p>
+                <p className="mt-1.5 text-[13px] font-semibold leading-snug text-ink">{m.title}</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-grey-600">{m.copy}</p>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Full copy for each milestone, shown below the road on small screens
-          where the on-image cards are too cramped for body text. */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:hidden">
-        {milestones.map((m) => (
+      {/* On mobile the on-image cards are too cramped for body text (see
+          the sm:block card above), so milestones are listed here instead —
+          a superscript number attached to the year (matching the pin's
+          number on the road image above), not a hexagon badge. */}
+      <div className="mt-4 flex flex-col gap-3 sm:hidden">
+        {milestones.map((m, i) => (
           <div key={m.year}>
-            <p className="text-[12px] font-bold text-ink">{m.year}</p>
+            <p className="text-[12px] font-bold text-ink">
+              {m.year}
+              <sup className="ml-0.5 text-[9px] font-semibold text-grey-500">{i + 1}</sup>
+            </p>
             <p className="text-[12px] leading-relaxed text-grey-600">{m.copy}</p>
           </div>
         ))}

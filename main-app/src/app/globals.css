@@ -18,6 +18,14 @@
   --summit-yellow-tint: #fffbd1;
   --summit-on-yellow: #1c1c1e;
 
+  /* Light green — "answered" / selected state (e.g. Growth Machine role
+     picker) distinct from the yellow brand accent used elsewhere. */
+  --summit-green: #22c55e;
+  --summit-green-hover: #16a34a;
+  --summit-green-pressed: #15803d;
+  --summit-green-tint: #e7f9ec;
+  --summit-on-green: #1c1c1e;
+
   /* New in the dark-mode-palette handoff: a muted mid-grey accent distinct
      from ink/text (which stays --summit-ink) — not wired into MUI's own
      `secondary` palette role to avoid colliding with its existing meaning
@@ -71,6 +79,15 @@
   --summit-yellow-tint: #201f1c;
   --summit-secondary-accent: #5a5a60;
 
+  /* Softer emerald reads better than the light-mode green on a dark
+     surface; tint matches the nav bar's dark surface shade with a hint
+     of green rather than plain grey, same treatment as yellow-tint above. */
+  --summit-green: #34d399;
+  --summit-green-hover: #10b981;
+  --summit-green-pressed: #059669;
+  --summit-green-tint: #16261c;
+  --summit-on-green: #1c1c1e;
+
   --summit-ink: #e2e2e2;
   --summit-grey-800: #e4e3e6;
   --summit-grey-700: #c5c4c8;
@@ -103,6 +120,12 @@
   --color-yellow-tint: var(--summit-yellow-tint);
   --color-on-yellow: var(--summit-on-yellow);
 
+  --color-green: var(--summit-green);
+  --color-green-hover: var(--summit-green-hover);
+  --color-green-pressed: var(--summit-green-pressed);
+  --color-green-tint: var(--summit-green-tint);
+  --color-on-green: var(--summit-on-green);
+
   --color-ink: var(--summit-ink);
   --color-secondary-accent: var(--summit-secondary-accent);
   --color-grey-800: var(--summit-grey-800);
@@ -131,6 +154,12 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  /* ChipspreaderMarquee breaks out to w-screen (100vw) for a full-bleed
+     crossing; 100vw doesn't subtract the vertical scrollbar's own width,
+     which otherwise leaves the page a few px wider than the viewport and
+     makes it horizontally scrollable — a subtle sideways jiggle as that
+     strip animates. Nothing on this site needs horizontal scroll. */
+  overflow-x: hidden;
 }
 
 html {
@@ -228,4 +257,103 @@ html {
   .summit-flip-card-inner {
     transition: none;
   }
+}
+
+/* Chipspreader marquee — see components/chipspreader-marquee.tsx.
+   `left` drives the crossing (loops off-screen right to off-screen left)
+   while `transform` handles an independent small bounce, so the two
+   animations don't fight over the same CSS property. */
+@keyframes summit-drive {
+  from {
+    left: 110%;
+  }
+  /* Pixel end value (not %): the truck sketch is ~262px wide at desktop
+     height, and on narrow phones -45% wasn't enough for it to fully
+     clear the left edge before looping back to the right. */
+  to {
+    left: -340px;
+  }
+}
+@keyframes summit-drive-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.animate-summit-drive {
+  position: absolute;
+  /* An abs-positioned box with no width shrink-to-fits against its
+     containing block's right edge, so once `left` passes the edge the
+     available width goes to zero and the truck image gets squashed.
+     max-content keeps the box at the image's natural width; the outer
+     overflow-hidden clipper then crops it at the screen edge, so the
+     off-screen part simply isn't visible (drives in/out) instead of
+     scrunching. */
+  width: max-content;
+  /* Longhand rather than the `animation` shorthand: the shorthand form
+     (`summit-drive 16s linear infinite backwards, summit-drive-bounce
+     ...`) silently loses the "backwards" keyword somewhere in this
+     project's CSS minifier when only one of two comma-separated
+     animations has a fill-mode — it never reaches the compiled output.
+     Longhand properties compile reliably. backwards also protects any
+     future animation-delay use here: without a fill-mode, an element
+     with a pending delay renders at its plain "left: auto" position —
+     the left edge, fully visible — until the delay elapses. */
+  animation-name: summit-drive, summit-drive-bounce;
+  animation-duration: 16s, 0.5s;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-fill-mode: backwards, none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-summit-drive {
+    animation: none;
+    left: 38%;
+  }
+}
+
+/* Little exhaust/dust puffs trailing the chipspreader — see
+   chipspreader-marquee.tsx. Each puff is a small circle anchored near
+   the truck's trailing (rear) edge, inside the same moving element as
+   the truck image, so it rides along and just puffs up + fades in place
+   rather than needing its own position-in-world tracking. Several
+   copies with staggered animation-delay keep a puff going continuously.
+   Starts from the Tailwind `opacity-0` on the element itself (not a
+   fill-mode) so a puff waiting out its delay is invisible instead of
+   flashing at full size — see the `backwards` note above for why a
+   comma-separated fill-mode isn't used here either. */
+@keyframes summit-dust {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.6) translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7) translate(10px, -16px);
+  }
+}
+.animate-summit-dust {
+  animation: summit-dust 1.15s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-summit-dust {
+    display: none;
+  }
+}
+
+/* Chips dropped by the chipspreader's chute — see chipspreader-marquee.tsx.
+   Unlike the dust puffs these live in the OUTER clipper (world space), so
+   they stay on the road where they landed while the truck drives on. Each
+   chip holds at full opacity for 3s (the animation-delay), then fades out
+   over 2s; the component removes the element from the DOM after that. */
+@keyframes summit-chip-fade {
+  to {
+    opacity: 0;
+  }
+}
+.animate-summit-chip {
+  animation: summit-chip-fade 2s ease-out 3s forwards;
 }

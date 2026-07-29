@@ -1,0 +1,17 @@
+name = "growth-machine-sync"
+main = "worker/worker.ts"
+compatibility_date = "2025-05-08"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+# One Durable Object instance per room (per-table board) — see worker.ts.
+# Shape/drawing sync only for now, no asset (image/video) upload bucket.
+[durable_objects]
+bindings = [{ name = "TLDRAW_DURABLE_OBJECT", class_name = "TldrawDurableObject" }]
+
+# Durable objects require migrations to create/modify/delete them.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TldrawDurableObject"]
