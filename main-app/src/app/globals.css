@@ -267,8 +267,11 @@ html {
   from {
     left: 110%;
   }
+  /* Pixel end value (not %): the truck sketch is ~262px wide at desktop
+     height, and on narrow phones -45% wasn't enough for it to fully
+     clear the left edge before looping back to the right. */
   to {
-    left: -45%;
+    left: -340px;
   }
 }
 @keyframes summit-drive-bounce {
@@ -282,6 +285,14 @@ html {
 }
 .animate-summit-drive {
   position: absolute;
+  /* An abs-positioned box with no width shrink-to-fits against its
+     containing block's right edge, so once `left` passes the edge the
+     available width goes to zero and the truck image gets squashed.
+     max-content keeps the box at the image's natural width; the outer
+     overflow-hidden clipper then crops it at the screen edge, so the
+     off-screen part simply isn't visible (drives in/out) instead of
+     scrunching. */
+  width: max-content;
   /* Longhand rather than the `animation` shorthand: the shorthand form
      (`summit-drive 16s linear infinite backwards, summit-drive-bounce
      ...`) silently loses the "backwards" keyword somewhere in this
@@ -331,4 +342,18 @@ html {
   .animate-summit-dust {
     display: none;
   }
+}
+
+/* Chips dropped by the chipspreader's chute — see chipspreader-marquee.tsx.
+   Unlike the dust puffs these live in the OUTER clipper (world space), so
+   they stay on the road where they landed while the truck drives on. Each
+   chip holds at full opacity for 3s (the animation-delay), then fades out
+   over 2s; the component removes the element from the DOM after that. */
+@keyframes summit-chip-fade {
+  to {
+    opacity: 0;
+  }
+}
+.animate-summit-chip {
+  animation: summit-chip-fade 2s ease-out 3s forwards;
 }

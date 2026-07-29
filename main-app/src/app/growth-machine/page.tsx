@@ -83,7 +83,7 @@ export default function GrowthMachinePage() {
   };
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className="flex min-h-dvh flex-col bg-background">
       <TopNav
         activeKey="growth-machine"
         logo={<NavLogo />}
@@ -92,7 +92,7 @@ export default function GrowthMachinePage() {
         onProfile={openProfile}
         onLogout={handleLogout}
       />
-      <PageContainer>
+      <PageContainer className="flex grow flex-col">
         <SectionHeader eyebrow="Collaborate live" title="Growth Machine" />
 
         <div className="flex flex-col items-center gap-8 py-6 sm:flex-row sm:justify-center sm:gap-14">
@@ -125,7 +125,12 @@ export default function GrowthMachinePage() {
           </p>
         </div>
 
-        <ChipspreaderMarquee />
+        {/* grow soaks up the leftover viewport height below the role picker;
+            justify-center parks the marquee in the middle of that gap, i.e.
+            halfway between the Builder/Spectator block and the page bottom. */}
+        <div className="flex grow flex-col justify-center">
+          <ChipspreaderMarquee />
+        </div>
       </PageContainer>
       {toast}
       {profileModal}

@@ -5,16 +5,23 @@ import Button from "@mui/material/Button";
 import { GrowthMachine, BoardOnboardingTour } from "@/components";
 
 /**
- * Route: /growth-machine/board?role=builder|spectator
+ * Route: /growth-machine/board?role=builder|spectator&table=<id>
  * The real collaborative canvas, reached only after picking a role on
  * /growth-machine. Builder can draw; anything else (missing/invalid param,
  * someone linking in directly) falls back to Spectator — the safer default
  * for an unauthenticated role param.
+ *
+ * `table` picks which room's board this is (see GrowthMachine/useSync) —
+ * defaults to a single shared "default" room until table selection/role
+ * assignment is actually wired up (tracked separately; enforcing "one
+ * builder per table" is meant to live in the database, not here).
  */
 function Board() {
   const router = useRouter();
-  const role = useSearchParams().get("role") === "builder" ? "builder" : "spectator";
+  const searchParams = useSearchParams();
+  const role = searchParams.get("role") === "builder" ? "builder" : "spectator";
   const isBuilder = role === "builder";
+  const roomId = searchParams.get("table") ?? "default";
 
   return (
     <div className="relative h-dvh w-dvw">
@@ -42,7 +49,7 @@ function Board() {
         </Button>
       </div>
 
-      <GrowthMachine readOnly={!isBuilder} />
+      <GrowthMachine readOnly={!isBuilder} roomId={roomId} />
       <BoardOnboardingTour role={role} />
     </div>
   );

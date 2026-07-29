@@ -1,0 +1,21 @@
+{
+  "name": "growth-machine-sync-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tldraw/sync-core": "5.2.4",
+    "@tldraw/tlschema": "5.2.4",
+    "itty-router": "^5.0.18"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260728.1",
+    "typescript": "^5",
+    "wrangler": "^4.75.0"
+  }
+}

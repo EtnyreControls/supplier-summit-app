@@ -18,6 +18,7 @@
     "@mui/material-nextjs": "^9.1.1",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.8",
+    "@tldraw/sync": "^5.2.4",
     "@tldraw/tlschema": "5.2.4",
     "geist": "^1.7.2",
     "jsqr": "^1.4.0",

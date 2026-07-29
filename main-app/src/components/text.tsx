@@ -3,8 +3,18 @@ import * as React from 'react'
 import type { ComponentProps } from 'react'
 import { Tldraw, DefaultStylePanel, DefaultToolbar, type Editor, type TLComponents, type TLPageId } from 'tldraw'
 import { toRichText } from '@tldraw/tlschema'
+import { useSync } from '@tldraw/sync'
+import { inlineBase64AssetStore } from '@tldraw/editor'
 import 'tldraw/tldraw.css'
 import Button from '@mui/material/Button'
+
+/**
+ * Base URL of the deployed sync-server Worker (see /sync-server), e.g.
+ * "wss://growth-machine-sync.<your-subdomain>.workers.dev" — set once it's
+ * deployed (see sync-server/README.md). Sync is simply off (each tab gets
+ * its own local, unsynced store, same as before) if this isn't set yet.
+ */
+const SYNC_SERVER_URL = process.env.NEXT_PUBLIC_TLDRAW_SYNC_URL;
 
 /**
  * tldraw's own panels default to top-right (style panel) and bottom-center
@@ -258,19 +268,56 @@ function BuilderFlow({ editor }: { editor: Editor }) {
  * shape-mutating method but not scribbles). Locked on as their only tool
  * since `hideUi` hides the toolbar they'd otherwise use to switch tools.
  *
- * Caveat: there's no multiplayer sync server wired up (see the note on the
- * board route) — Builder and Spectator each have their own local, isolated
- * store in their own browser tab, so a Spectator's laser trail currently
- * only appears on their own screen, not the Builder's. Making it actually
- * cross-browser needs a real sync backend (e.g. tldraw sync), which is a
- * separate, bigger task than this component.
+ * Synced via the sync-server Worker (see /sync-server) when
+ * NEXT_PUBLIC_TLDRAW_SYNC_URL is set — one room per `roomId` (currently the
+ * table id, see /growth-machine/board), so Builder and Spectators at the
+ * same table share a live document instead of each getting their own
+ * isolated local store. Falls back to a local, unsynced store (today's
+ * behavior) if that env var isn't configured yet.
  */
-export function GrowthMachine({ readOnly = false }: { readOnly?: boolean }) {
+export function GrowthMachine({
+  readOnly = false,
+  roomId = 'default',
+}: {
+  readOnly?: boolean;
+  roomId?: string;
+}) {
+  if (SYNC_SERVER_URL) {
+    return <SyncedGrowthMachineCanvas readOnly={readOnly} roomId={roomId} syncServerUrl={SYNC_SERVER_URL} />;
+  }
+  return <GrowthMachineCanvas readOnly={readOnly} />;
+}
+
+function SyncedGrowthMachineCanvas({
+  readOnly,
+  roomId,
+  syncServerUrl,
+}: {
+  readOnly: boolean;
+  roomId: string;
+  syncServerUrl: string;
+}) {
+  // No upload backend wired up yet (deliberately out of scope — see
+  // sync-server/README.md), so pasted images/videos are inlined as base64
+  // rather than uploaded. Fine for this board's actual usage (drawings and
+  // locked heading shapes), not recommended if large media becomes common.
+  const store = useSync({ uri: `${syncServerUrl}/api/connect/${roomId}`, assets: inlineBase64AssetStore });
+  return <GrowthMachineCanvas readOnly={readOnly} store={store} />;
+}
+
+function GrowthMachineCanvas({
+  readOnly,
+  store,
+}: {
+  readOnly: boolean;
+  store?: ReturnType<typeof useSync>;
+}) {
   const [editor, setEditor] = React.useState<Editor | null>(null);
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <Tldraw
+        store={store}
         hideUi={readOnly}
         components={components}
         onMount={(ed: Editor) => {
