@@ -29,10 +29,10 @@ export interface NavItem {
  * users (see the role fetch in TopNav below).
  */
 const NAV_ITEMS: NavItem[] = [
-  { key: "about", label: "About us", href: "/#about" },
-  { key: "agenda", label: "Agenda & speakers", href: "/agenda" },
-  { key: "polls", label: "Polls & feedback", href: "/polls" },
-  { key: "questions", label: "My questions", href: "/questions" },
+  { key: "about", label: "About Us", href: "/#about" },
+  { key: "agenda", label: "Agenda & Speakers", href: "/agenda" },
+  { key: "polls", label: "Polls & Feedback", href: "/polls" },
+  { key: "questions", label: "My Questions", href: "/questions" },
   { key: "growth-machine", label: "Growth Machine", href: "/growth-machine" },
 ];
 

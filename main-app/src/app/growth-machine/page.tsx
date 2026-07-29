@@ -14,6 +14,7 @@ import {
   useBadgeQrModal,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
+import { enterGrowthMachine } from "@/lib/supabase/growth-machine";
 
 /**
  * Route: /growth-machine ("Growth Machine" in TopNav)
@@ -74,12 +75,35 @@ export default function GrowthMachinePage() {
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const router = useRouter();
   const [selectedRole, setSelectedRole] = React.useState<Role | null>(null);
+  const [joining, setJoining] = React.useState(false);
 
-  const chooseRole = (role: Role) => {
+  const chooseRole = async (role: Role) => {
+    if (joining) return;
     setSelectedRole(role);
+    setJoining(true);
+
+    // Resolve the attendee's assigned table and claim/release the builder
+    // seat in the database — one builder per table is enforced there (see
+    // the growth_machine_board_sync migration), so two people tapping
+    // Builder at once can't both get it.
+    // On error (RPC unavailable, signed-out local dev) fall back to the
+    // shared default room with the chosen role — same as before the
+    // database wiring, so the board is never blocked on the lookup.
+    const { tableId, isBuilder } = await enterGrowthMachine(role === "builder").catch(() => ({
+      tableId: null,
+      isBuilder: false,
+    }));
+
+    let finalRole: Role = role;
+    if (role === "builder" && !isBuilder && tableId) {
+      finalRole = "spectator";
+      showToast("Your table already has a Builder — joining as a Spectator");
+    }
+
+    const table = tableId ? `&table=${tableId}` : "";
     // Brief pause so the green "answered" state is visible before the
     // board route takes over.
-    setTimeout(() => router.push(`/growth-machine/board?role=${role}`), 180);
+    setTimeout(() => router.push(`/growth-machine/board?role=${finalRole}${table}`), 180);
   };
 
   return (

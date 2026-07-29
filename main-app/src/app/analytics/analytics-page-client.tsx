@@ -247,7 +247,6 @@ export function AnalyticsPageClient({
       />
 
       <PageContainer>
-        <SectionHeader eyebrow="Analytics only" title="Analytics" />
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_1fr] lg:items-start">
           {/* Desktop sidebar — same active-item convention as TopNav's mobile drawer. */}

@@ -1,12 +1,13 @@
 "use client"
 import * as React from 'react'
 import type { ComponentProps } from 'react'
-import { Tldraw, DefaultStylePanel, DefaultToolbar, type Editor, type TLComponents, type TLPageId } from 'tldraw'
+import { Tldraw, DefaultStylePanel, DefaultToolbar, getSnapshot, type Editor, type TLComponents, type TLPageId } from 'tldraw'
 import { toRichText } from '@tldraw/tlschema'
 import { useSync } from '@tldraw/sync'
 import { inlineBase64AssetStore } from '@tldraw/editor'
 import 'tldraw/tldraw.css'
 import Button from '@mui/material/Button'
+import { submitGrowthMachineBoard } from '@/lib/supabase/growth-machine'
 
 /**
  * Base URL of the deployed sync-server Worker (see /sync-server), e.g.
@@ -82,12 +83,14 @@ const HEADING_BOUNDS = { x: -350, y: -260, w: 700, h: 110 }
  * toImage() on the editor we already know has the shapes is simpler and
  * more reliable.
  */
-function BuilderFlow({ editor }: { editor: Editor }) {
+function BuilderFlow({ editor, roomId }: { editor: Editor; roomId: string }) {
   const [pageIds, setPageIds] = React.useState<TLPageId[] | null>(null);
   const [index, setIndex] = React.useState(0);
-  const [mode, setMode] = React.useState<'editing' | 'review'>('editing');
+  const [mode, setMode] = React.useState<'editing' | 'review' | 'submitted'>('editing');
   const [thumbnails, setThumbnails] = React.useState<Record<string, string>>({});
   const [generating, setGenerating] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
   const setupRan = React.useRef(false);
 
   React.useEffect(() => {
@@ -177,6 +180,43 @@ function BuilderFlow({ editor }: { editor: Editor }) {
     setMode('review');
   };
 
+  // Sends the whole tldraw document (all 5 prompt pages) to Supabase —
+  // growth_machine_boards, builder-only per its RPC. The snapshot's
+  // `document` half is the shared drawing; `session` (camera, selections)
+  // is per-user noise and deliberately left out.
+  const submitBoard = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    const { document } = getSnapshot(editor.store);
+    // The board submission can hang indefinitely if the request never gets
+    // a response (e.g. a dropped connection) — a timeout keeps the button
+    // from being stuck on "Submitting…" forever.
+    const timeout = new Promise<{ error: string }>((resolve) =>
+      setTimeout(() => resolve({ error: "Submission timed out. Please try again." }), 20000)
+    );
+    const { error } = await Promise.race([submitGrowthMachineBoard(roomId, document), timeout]);
+    setSubmitting(false);
+    if (error) {
+      setSubmitError(error);
+      return;
+    }
+    setMode('submitted');
+  };
+
+  if (mode === 'submitted') {
+    return (
+      <div className="pointer-events-auto fixed inset-0 z-[500] flex flex-col items-center justify-center bg-background p-6">
+        <h1 className="text-center text-xl font-bold text-ink">Board submitted</h1>
+        <p className="mt-1 text-center text-sm text-grey-600">
+          Your table&apos;s board is saved — thanks for building!
+        </p>
+        <Button className="mt-5" variant="outlined" color="secondary" onClick={() => setMode('review')}>
+          Back to review
+        </Button>
+      </div>
+    );
+  }
+
   if (mode === 'review') {
     const allFilled = pageIds.every((id) => thumbnails[id]);
     return (
@@ -215,13 +255,14 @@ function BuilderFlow({ editor }: { editor: Editor }) {
           {!allFilled && (
             <p className="text-xs text-grey-500">Every prompt needs a drawing before you can submit.</p>
           )}
+          {submitError && <p className="text-xs text-amber-700">{submitError}</p>}
           <Button
             variant="contained"
             color="primary"
-            disabled={!allFilled}
-            onClick={() => alert('Board submitted!')}
+            disabled={!allFilled || submitting}
+            onClick={submitBoard}
           >
-            Submit board
+            {submitting ? 'Submitting…' : 'Submit board'}
           </Button>
         </div>
       </div>
@@ -285,7 +326,7 @@ export function GrowthMachine({
   if (SYNC_SERVER_URL) {
     return <SyncedGrowthMachineCanvas readOnly={readOnly} roomId={roomId} syncServerUrl={SYNC_SERVER_URL} />;
   }
-  return <GrowthMachineCanvas readOnly={readOnly} />;
+  return <GrowthMachineCanvas readOnly={readOnly} roomId={roomId} />;
 }
 
 function SyncedGrowthMachineCanvas({
@@ -302,14 +343,16 @@ function SyncedGrowthMachineCanvas({
   // rather than uploaded. Fine for this board's actual usage (drawings and
   // locked heading shapes), not recommended if large media becomes common.
   const store = useSync({ uri: `${syncServerUrl}/api/connect/${roomId}`, assets: inlineBase64AssetStore });
-  return <GrowthMachineCanvas readOnly={readOnly} store={store} />;
+  return <GrowthMachineCanvas readOnly={readOnly} roomId={roomId} store={store} />;
 }
 
 function GrowthMachineCanvas({
   readOnly,
+  roomId,
   store,
 }: {
   readOnly: boolean;
+  roomId: string;
   store?: ReturnType<typeof useSync>;
 }) {
   const [editor, setEditor] = React.useState<Editor | null>(null);
@@ -326,7 +369,7 @@ function GrowthMachineCanvas({
           setEditor(ed);
         }}
       />
-      {!readOnly && editor && <BuilderFlow editor={editor} />}
+      {!readOnly && editor && <BuilderFlow editor={editor} roomId={roomId} />}
     </div>
   );
 }

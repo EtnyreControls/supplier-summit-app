@@ -3,6 +3,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@mui/material/Button";
 import { GrowthMachine, BoardOnboardingTour } from "@/components";
+import { enterGrowthMachine } from "@/lib/supabase/growth-machine";
 
 /**
  * Route: /growth-machine/board?role=builder|spectator&table=<id>
@@ -11,10 +12,12 @@ import { GrowthMachine, BoardOnboardingTour } from "@/components";
  * someone linking in directly) falls back to Spectator — the safer default
  * for an unauthenticated role param.
  *
- * `table` picks which room's board this is (see GrowthMachine/useSync) —
- * defaults to a single shared "default" room until table selection/role
- * assignment is actually wired up (tracked separately; enforcing "one
- * builder per table" is meant to live in the database, not here).
+ * `table` picks which room's board this is (see GrowthMachine/useSync).
+ * /growth-machine fills it with the attendee's assigned table after
+ * claiming a role via enter_growth_machine() — the database enforces one
+ * builder per table (partial unique index, see the
+ * growth_machine_board_sync migration). A missing param still falls back
+ * to the shared "default" room for unassigned users and local dev.
  */
 function Board() {
   const router = useRouter();
@@ -33,7 +36,12 @@ function Board() {
           variant="contained"
           className="pointer-events-auto"
           data-tour="leave-board"
-          onClick={() => router.push("/growth-machine")}
+          onClick={() => {
+            // Leaving as the Builder frees the seat for someone else at the
+            // table; best-effort — navigation shouldn't wait on it.
+            if (isBuilder) void enterGrowthMachine(false);
+            router.push("/growth-machine");
+          }}
           sx={{
             bgcolor: "#000",
             color: "#fff",

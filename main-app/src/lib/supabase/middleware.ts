@@ -26,8 +26,12 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Refreshes the auth token if expired — required so Server Components
-  // (which can't write cookies) see a valid session.
-  await supabase.auth.getUser();
+  // (which can't write cookies) see a valid session. The user comes back
+  // too so the proxy auth gate (src/proxy.ts) can decide without a second
+  // round-trip.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  return response;
+  return { response, user };
 }
