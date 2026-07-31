@@ -23,7 +23,7 @@ export { OurValues } from "./homepage/values";
 export { JourneyRoadmap } from "./homepage/journey-roadmap"
 export { RoadAheadDial } from "./homepage/road-ahead-dial"
 export { BusinessUnits } from "./homepage/business-units"
-export { GrowthMachine } from "./text"
+export { GrowthMachine, GrowthMachineBoardViewer } from "./text"
 export { ChipspreaderMarquee } from "./chipspreader-marquee"
 export { BoardOnboardingTour } from "./board-onboarding-tour"
 export { AgendaTimeline, type AgendaSession } from "./agenda/agenda-timeline";
@@ -31,3 +31,10 @@ export { SessionDetail, type AgendaSpeaker } from "./agenda/session-detail";
 export { AddressableList, sortAddressable, type AddressableItem } from "./admin/addressable-list";
 export { VoteLeaderboard, type VoteEntry } from "./admin/vote-leaderboard";
 export { FeedbackTopics, type FeedbackTopic, type FeedbackTopicsResponse } from "./admin/feedback-topics";
+export {
+  GrowthMachineProgress,
+  GrowthMachineSubmissions,
+  type GrowthMachineTableStatus,
+  type GrowthMachineTableProgress,
+  type GrowthMachineBoardSummary,
+} from "./admin/growth-machine-progress";
