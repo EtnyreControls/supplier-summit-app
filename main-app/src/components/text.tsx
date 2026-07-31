@@ -1,8 +1,18 @@
 "use client"
 import * as React from 'react'
 import type { ComponentProps } from 'react'
-import { Tldraw, DefaultStylePanel, DefaultToolbar, getSnapshot, type Editor, type TLComponents, type TLPageId } from 'tldraw'
-import { toRichText } from '@tldraw/tlschema'
+import {
+  Tldraw,
+  DefaultStylePanel,
+  DefaultToolbar,
+  getSnapshot,
+  createTLStore,
+  loadSnapshot,
+  type Editor,
+  type TLComponents,
+  type TLPageId,
+} from 'tldraw'
+import { toRichText, type TLStoreSnapshot } from '@tldraw/tlschema'
 import { useSync } from '@tldraw/sync'
 import { inlineBase64AssetStore } from '@tldraw/editor'
 import 'tldraw/tldraw.css'
@@ -370,6 +380,43 @@ function GrowthMachineCanvas({
         }}
       />
       {!readOnly && editor && <BuilderFlow editor={editor} roomId={roomId} />}
+    </div>
+  );
+}
+
+/**
+ * Read-only browser for a submitted board (growth_machine_boards.snapshot,
+ * see analytics-page-client.tsx's Growth Machine section). Loads the stored
+ * document into a fresh local-only store via tldraw's loadSnapshot — no
+ * sync-server connection, since this is browsing a finished submission, not
+ * the live room. Only `document` was ever stored (see submitBoard above),
+ * so `session` (camera/selection) is left for tldraw to default.
+ */
+export function GrowthMachineBoardViewer({ snapshot, onClose }: { snapshot: unknown; onClose: () => void }) {
+  const [store] = React.useState(() => {
+    const s = createTLStore();
+    loadSnapshot(s, { document: snapshot as TLStoreSnapshot });
+    return s;
+  });
+
+  return (
+    <div className="fixed inset-0 z-[600] bg-background">
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-[610] flex justify-end p-3">
+        <Button
+          variant="contained"
+          className="pointer-events-auto"
+          onClick={onClose}
+          sx={{ bgcolor: '#000', color: '#fff' }}
+        >
+          Close
+        </Button>
+      </div>
+      <Tldraw
+        store={store}
+        onMount={(ed: Editor) => {
+          ed.updateInstanceState({ isReadonly: true });
+        }}
+      />
     </div>
   );
 }

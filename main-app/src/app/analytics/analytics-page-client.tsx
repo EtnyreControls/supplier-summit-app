@@ -11,6 +11,7 @@ import HowToVoteRoundedIcon from "@mui/icons-material/HowToVoteRounded";
 import PollRoundedIcon from "@mui/icons-material/PollRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import HubRoundedIcon from "@mui/icons-material/HubRounded";
 import {
   PageContainer,
   SectionHeader,
@@ -27,11 +28,16 @@ import {
   AddressableList,
   VoteLeaderboard,
   FeedbackTopics,
+  GrowthMachineProgress,
+  GrowthMachineSubmissions,
+  GrowthMachineBoardViewer,
   type PollOption,
   type AddressableItem,
   type AddressableSpeakerOption,
   type FeedbackTopicsResponse,
   type VoteEntry,
+  type GrowthMachineTableProgress,
+  type GrowthMachineBoardSummary,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 import { toggleQuestionGroupChecked } from "@/lib/supabase/toggle-question-group";
@@ -39,6 +45,7 @@ import { removeQuestionFromGroup } from "@/lib/supabase/remove-question-from-gro
 import { answerQuestionGroup } from "@/lib/supabase/answer-question-group";
 import { toggleFeedbackTopicAddressed } from "@/lib/supabase/toggle-feedback-topic";
 import { overrideQuestionRouting } from "@/lib/supabase/override-routing";
+import { getGrowthMachineBoardSnapshot } from "@/lib/supabase/get-growth-machine-board";
 
 /**
  * Route: /analytics ("Analytics" in TopNav, role="analytics" only —
@@ -59,13 +66,14 @@ import { overrideQuestionRouting } from "@/lib/supabase/override-routing";
  * checkbox itself, same as AddressableList does for Questions.
  */
 
-type SectionKey = "questions" | "feedback" | "voting" | "polls" | "dashboard";
+type SectionKey = "questions" | "feedback" | "voting" | "polls" | "growth_machine" | "dashboard";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ReactElement }[] = [
   { key: "questions", label: "Questions", icon: <QuestionAnswerRoundedIcon fontSize="small" /> },
   { key: "feedback", label: "Feedback", icon: <RateReviewRoundedIcon fontSize="small" /> },
   { key: "voting", label: "Voting", icon: <HowToVoteRoundedIcon fontSize="small" /> },
   { key: "polls", label: "Polls", icon: <PollRoundedIcon fontSize="small" /> },
+  { key: "growth_machine", label: "Growth Machine", icon: <HubRoundedIcon fontSize="small" /> },
   { key: "dashboard", label: "Dashboard", icon: <InsightsRoundedIcon fontSize="small" /> },
 ];
 
@@ -135,11 +143,15 @@ export function AnalyticsPageClient({
   initialFeedbackTopics,
   unroutedCount,
   availableSpeakers,
+  growthMachineTables,
+  growthMachineBoards,
 }: {
   initialQuestions: AddressableItem[];
   initialFeedbackTopics: FeedbackTopicsResponse;
   unroutedCount: number;
   availableSpeakers: AddressableSpeakerOption[];
+  growthMachineTables: GrowthMachineTableProgress[];
+  growthMachineBoards: GrowthMachineBoardSummary[];
 }) {
   const router = useRouter();
   const { toast, showToast } = useToast();
@@ -150,6 +162,8 @@ export function AnalyticsPageClient({
   const [questions, setQuestions] = React.useState(initialQuestions);
   const [feedbackTopics, setFeedbackTopics] = React.useState(initialFeedbackTopics);
   const [regrouping, setRegrouping] = React.useState(false);
+  const [viewingBoardId, setViewingBoardId] = React.useState<string | null>(null);
+  const [viewerSnapshot, setViewerSnapshot] = React.useState<unknown | null>(null);
 
   // Regrouping (merging near-duplicate questions) changes which ids exist,
   // so it can't be applied as a local optimistic patch like toggleQuestion
@@ -260,8 +274,21 @@ export function AnalyticsPageClient({
     return { error };
   };
 
+  const handleViewBoard = async (boardId: string) => {
+    setViewingBoardId(boardId);
+    const { snapshot, error } = await getGrowthMachineBoardSnapshot(boardId);
+    setViewingBoardId(null);
+    if (error || !snapshot) {
+      showToast(error ?? "Couldn't load this submission.", "error");
+      return;
+    }
+    setViewerSnapshot(snapshot);
+  };
+
   const questionsOpen = questions.filter((q) => !q.addressed).length;
   const feedbackOpen = feedbackTopics.topics.filter((t) => !t.addressed).length;
+  const tablesBuilding = growthMachineTables.filter((t) => t.status === "building").length;
+  const tablesSubmitted = growthMachineTables.filter((t) => t.status === "submitted").length;
 
   return (
     <div className="min-h-dvh bg-background">
@@ -395,6 +422,29 @@ export function AnalyticsPageClient({
               </>
             )}
 
+            {section === "growth_machine" && (
+              <>
+                <SectionHeader
+                  eyebrow={`${tablesBuilding} building · ${tablesSubmitted} submitted`}
+                  title="Growth Machine"
+                />
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-ink">Team progress</h3>
+                    <GrowthMachineProgress tables={growthMachineTables} />
+                  </div>
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-ink">Submissions</h3>
+                    <GrowthMachineSubmissions
+                      boards={growthMachineBoards}
+                      onView={handleViewBoard}
+                      loadingBoardId={viewingBoardId}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
             {section === "dashboard" && (
               <>
                 <SectionHeader eyebrow="Overview" title="Analytics dashboard" />
@@ -433,6 +483,9 @@ export function AnalyticsPageClient({
       {toast}
       {profileModal}
       {badgeQrModal}
+      {viewerSnapshot !== null && (
+        <GrowthMachineBoardViewer snapshot={viewerSnapshot} onClose={() => setViewerSnapshot(null)} />
+      )}
     </div>
   );
 }
