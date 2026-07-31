@@ -13,6 +13,7 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
+import RecordVoiceOverRoundedIcon from "@mui/icons-material/RecordVoiceOverRounded";
 import { ModeToggle } from "./mode-toggle";
 import { createClient } from "@/lib/supabase/client";
 
@@ -43,6 +44,13 @@ const ANALYTICS_NAV_ITEM: NavItem = {
   icon: <InsightsRoundedIcon sx={{ fontSize: 16 }} />,
 };
 
+const SPEAKER_NAV_ITEM: NavItem = {
+  key: "speaker",
+  label: "Speaker Inbox",
+  href: "/speaker",
+  icon: <RecordVoiceOverRoundedIcon sx={{ fontSize: 16 }} />,
+};
+
 /**
  * Responsive top navigation.
  * Desktop (md+): logo · centered links (yellow underline = active) · QR + profile.
@@ -68,6 +76,7 @@ export function TopNav({
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [anchor, setAnchor] = React.useState<null | HTMLElement>(null);
   const [isAnalytics, setIsAnalytics] = React.useState(false);
+  const [isSpeaker, setIsSpeaker] = React.useState(false);
 
   React.useEffect(() => {
     const supabase = createClient();
@@ -78,15 +87,19 @@ export function TopNav({
       if (!user) return;
       const { data } = await supabase.from("user").select("role").eq("user_id", user.id).single();
       if (data?.role === "analytics") setIsAnalytics(true);
+      if (data?.role === "speaker") setIsSpeaker(true);
     })();
   }, []);
 
-  // Analytics-role users are staff, not attendees — "My questions" (their
-  // own submitted Q&A) doesn't apply to them, so it's swapped out for the
-  // Analytics section instead of just appending onto the attendee nav.
+  // Analytics/speaker-role users are staff, not attendees — "My questions"
+  // (their own submitted Q&A) doesn't apply to them, so it's swapped out for
+  // their respective staff section instead of just appending onto the
+  // attendee nav.
   const navItems = isAnalytics
     ? [...NAV_ITEMS.filter((item) => item.key !== "questions"), ANALYTICS_NAV_ITEM]
-    : NAV_ITEMS;
+    : isSpeaker
+      ? [...NAV_ITEMS.filter((item) => item.key !== "questions"), SPEAKER_NAV_ITEM]
+      : NAV_ITEMS;
 
   return (
     <header className="sticky top-0 z-40 border-b border-grey-200 bg-grey-50 shadow-sm">

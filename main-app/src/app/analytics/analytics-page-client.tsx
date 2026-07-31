@@ -23,11 +23,13 @@ import {
   useToast,
   useProfileModal,
   useBadgeQrModal,
+  Banner,
   AddressableList,
   VoteLeaderboard,
   FeedbackTopics,
   type PollOption,
   type AddressableItem,
+  type AddressableSpeakerOption,
   type FeedbackTopicsResponse,
   type VoteEntry,
 } from "@/components";
@@ -36,6 +38,7 @@ import { toggleQuestionGroupChecked } from "@/lib/supabase/toggle-question-group
 import { removeQuestionFromGroup } from "@/lib/supabase/remove-question-from-group";
 import { answerQuestionGroup } from "@/lib/supabase/answer-question-group";
 import { toggleFeedbackTopicAddressed } from "@/lib/supabase/toggle-feedback-topic";
+import { overrideQuestionRouting } from "@/lib/supabase/override-routing";
 
 /**
  * Route: /analytics ("Analytics" in TopNav, role="analytics" only —
@@ -130,9 +133,13 @@ function addressedRate(items: { addressed: boolean }[]) {
 export function AnalyticsPageClient({
   initialQuestions,
   initialFeedbackTopics,
+  unroutedCount,
+  availableSpeakers,
 }: {
   initialQuestions: AddressableItem[];
   initialFeedbackTopics: FeedbackTopicsResponse;
+  unroutedCount: number;
+  availableSpeakers: AddressableSpeakerOption[];
 }) {
   const router = useRouter();
   const { toast, showToast } = useToast();
@@ -196,6 +203,27 @@ export function AnalyticsPageClient({
     }
     router.refresh();
     showToast("Removed from group");
+  };
+
+  // Reassignment changes routing status + attempted-speaker history, not
+  // group membership — but that data isn't in local `questions` state at
+  // all (only page.tsx's server query computes it), so this re-syncs from
+  // the server rather than patching. A merged group applies the same
+  // reassignment to every underlying question_id, sequentially — if one
+  // fails partway (e.g. a race on the unique-speaker constraint), the
+  // error surfaces and the refresh afterward shows exactly what actually
+  // landed rather than trusting the loop blindly.
+  const handleReassignRouting = async (questionIds: string[], newSpeakerId: string) => {
+    for (const questionId of questionIds) {
+      const { error } = await overrideQuestionRouting(questionId, newSpeakerId);
+      if (error) {
+        showToast(error, "error");
+        router.refresh();
+        return;
+      }
+    }
+    router.refresh();
+    showToast("Question reassigned");
   };
 
   const handleSubmitAnswer = async (groupId: string, answerText: string) => {
@@ -316,11 +344,20 @@ export function AnalyticsPageClient({
                     </Button>
                   }
                 />
+                {unroutedCount > 0 && (
+                  <div className="mb-4">
+                    <Banner>
+                      {`${unroutedCount} question${unroutedCount === 1 ? "" : "s"} exhausted every speaker and couldn't be routed — sorted to the top below, ready to reassign.`}
+                    </Banner>
+                  </div>
+                )}
                 <AddressableList
                   items={questions}
                   onToggle={toggleQuestion}
                   onRemoveGroupItem={handleRemoveGroupItem}
                   onSubmitAnswer={handleSubmitAnswer}
+                  availableSpeakers={availableSpeakers}
+                  onReassignRouting={handleReassignRouting}
                 />
               </>
             )}

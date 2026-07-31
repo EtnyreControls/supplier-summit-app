@@ -6,10 +6,22 @@ import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import TextField from "@mui/material/TextField";
+import MenuItem from "@mui/material/MenuItem";
 import Button from "@mui/material/Button";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { AiTag } from "../ai-tag";
+
+export interface AddressableRouting {
+  status: string; // "pending" | "accepted" | "declined" | "unrouted" | "reassigned"
+  speakerId: string | null;
+  speakerName: string | null;
+}
+
+export interface AddressableSpeakerOption {
+  speakerId: string;
+  name: string;
+}
 
 export interface AddressableGroupItem {
   id: string;
@@ -25,17 +37,30 @@ export interface AddressableItem {
   answerText?: string | null; // present only where answering is wired up (e.g. Questions, not Feedback)
   addressed: boolean;
   addressedAt: number | null; // sort key among addressed items; null while unaddressed
+  // ML routing feature (Questions only, not Feedback) — one control per
+  // question regardless of how many near-duplicates got merged into it.
+  routing?: AddressableRouting | null;
+  attemptedSpeakerIds?: string[]; // every speaker (by person) ever attempted — excluded from reassign options
+  questionIds?: string[]; // underlying question_id(s) a reassign applies to — >1 when this item is a merged group
 }
 
 /**
- * Ranked, checkable list for Questions/Feedback. Unaddressed items sort by
- * count (most to least raised); checking one moves it into the addressed
- * group at the bottom, ordered by when it was checked off.
+ * Ranked, checkable list for Questions/Feedback. Unaddressed items sort
+ * unrouted-first (nobody's on the hook to answer these — they need
+ * attention before anything else), then by count (most to least raised);
+ * checking one moves it into the addressed group at the bottom, ordered by
+ * when it was checked off. `routing` is undefined for Feedback items, so
+ * this tier is a no-op there.
  */
 export function sortAddressable(items: AddressableItem[]): AddressableItem[] {
   return [...items].sort((a, b) => {
     if (a.addressed !== b.addressed) return a.addressed ? 1 : -1;
-    if (!a.addressed) return b.count - a.count;
+    if (!a.addressed) {
+      const aUnrouted = a.routing?.status === "unrouted" ? 1 : 0;
+      const bUnrouted = b.routing?.status === "unrouted" ? 1 : 0;
+      if (aUnrouted !== bUnrouted) return bUnrouted - aUnrouted;
+      return b.count - a.count;
+    }
     return (a.addressedAt ?? 0) - (b.addressedAt ?? 0);
   });
 }
@@ -46,17 +71,35 @@ export function AddressableList({
   onRemoveGroupItem,
   onSubmitAnswer,
   countLabel = "asked",
+  availableSpeakers,
+  onReassignRouting,
 }: {
   items: AddressableItem[];
   onToggle: (id: string) => void;
   onRemoveGroupItem?: (groupItemId: string) => void;
   onSubmitAnswer?: (id: string, answerText: string) => void | Promise<void>;
   countLabel?: string;
+  availableSpeakers?: AddressableSpeakerOption[]; // present only for Questions (ML routing feature)
+  onReassignRouting?: (questionIds: string[], newSpeakerId: string) => void | Promise<void>;
 }) {
   const sorted = sortAddressable(items);
   const openCount = sorted.filter((i) => !i.addressed).length;
   const addressedCount = sorted.length - openCount;
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  const [reassigning, setReassigning] = React.useState<Set<string>>(new Set());
+  const handleReassign = async (item: AddressableItem, newSpeakerId: string) => {
+    if (!onReassignRouting || !newSpeakerId) return;
+    setReassigning((prev) => new Set(prev).add(item.id));
+    try {
+      await onReassignRouting(item.questionIds ?? [item.id], newSpeakerId);
+    } finally {
+      setReassigning((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -93,6 +136,23 @@ export function AddressableList({
     }
   };
   let rank = 0;
+
+  const routingLabel = (routing: AddressableRouting | null | undefined) => {
+    if (!routing) return "Not yet routed";
+    const who = routing.speakerName ?? "Unknown speaker";
+    switch (routing.status) {
+      case "unrouted":
+        return "Unrouted — no speaker left";
+      case "accepted":
+        return `Accepted — ${who}`;
+      case "declined":
+        return `Declined — ${who}`;
+      case "reassigned":
+        return `Reassigned — ${who}`;
+      default:
+        return `Pending — ${who}`;
+    }
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -131,6 +191,52 @@ export function AddressableList({
                 >
                   {item.text}
                 </p>
+                {(item.routing !== undefined || onReassignRouting) &&
+                  (() => {
+                    // The select's value IS the current assignment (a real
+                    // speakerId, or "" for "not yet routed"/"unrouted") —
+                    // one control shows current state AND lets analytics
+                    // change it, rather than a separate status chip plus a
+                    // blank "pick one" dropdown.
+                    const currentSpeakerId =
+                      item.routing && item.routing.status !== "unrouted" ? item.routing.speakerId : null;
+                    const otherOptions = (availableSpeakers ?? []).filter(
+                      (sp) => sp.speakerId !== currentSpeakerId && !(item.attemptedSpeakerIds ?? []).includes(sp.speakerId)
+                    );
+                    if (!onReassignRouting) {
+                      return item.routing ? (
+                        <div className="mt-1.5">
+                          <Chip
+                            size="small"
+                            label={routingLabel(item.routing)}
+                            sx={{ backgroundColor: "var(--color-grey-100)", color: "var(--color-grey-700)", fontSize: 11 }}
+                          />
+                        </div>
+                      ) : null;
+                    }
+                    return (
+                      <div className="mt-1.5">
+                        <TextField
+                          select
+                          size="small"
+                          value={currentSpeakerId ?? ""}
+                          disabled={reassigning.has(item.id)}
+                          onChange={(e) => handleReassign(item, e.target.value)}
+                          slotProps={{ select: { displayEmpty: true } }}
+                          sx={{ minWidth: 200, "& .MuiInputBase-input": { fontSize: 11, py: 0.5 } }}
+                        >
+                          <MenuItem value={currentSpeakerId ?? ""} sx={{ fontSize: 12 }}>
+                            {reassigning.has(item.id) ? "Reassigning…" : routingLabel(item.routing)}
+                          </MenuItem>
+                          {otherOptions.map((sp) => (
+                            <MenuItem key={sp.speakerId} value={sp.speakerId} sx={{ fontSize: 12 }}>
+                              {sp.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </div>
+                    );
+                  })()}
                 {!item.addressed && item.groupCount != null && item.groupCount > 1 && (
                   <>
                     <div className="mt-2 flex items-center gap-2">

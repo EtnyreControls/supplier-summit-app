@@ -1,0 +1,12 @@
+-- The original migration assumed 'unrouted' was a single terminal state a
+-- question could only ever reach once, so it capped question_routing to one
+-- unrouted row per question_id. That assumption broke once reassignment
+-- (override_question_routing) and the low-confidence threshold in
+-- route_question() were added: a question can legitimately cycle through
+-- unrouted -> reassigned -> pending -> ... -> unrouted again over its
+-- lifetime (e.g. reassigned to a speaker whose best-available score still
+-- doesn't clear MIN_ROUTING_SIMILARITY). The index silently blocked that
+-- second insert. Safe to drop — attempt_number's own unique constraint
+-- already prevents true duplicate-insert races; "current state" is always
+-- read as the latest attempt_number, same as every other status.
+drop index if exists public.question_routing_one_unrouted_per_question;

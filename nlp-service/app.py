@@ -60,6 +60,16 @@ QUESTIONS_EMBEDDING_MODEL = "sentence-transformers/multi-qa-mpnet-base-dot-v1"
 # merges when it's actually similar enough to another one.
 QUESTION_SIMILARITY_THRESHOLD = 0.65
 
+SPEAKERS_TABLE = "speakers"
+QUESTION_ROUTING_TABLE = "question_routing"
+# Calibrated against real questions/speaker bios in this deployment (see
+# the routing-feature migration history) — cosine similarity here mostly
+# lands in a 0.22-0.39 band with no clean bimodal split, so this isn't a
+# "confident vs not" cliff, just a line under the clearly-nonsensical
+# matches (a fleet-maintenance question landing on the CEO's session, etc).
+# Adjust if real usage shows it's too aggressive/lenient.
+MIN_ROUTING_SIMILARITY = 0.28
+
 app = FastAPI(title="Supplier Summit NLP Service")
 
 _embedding_model = None
@@ -92,6 +102,19 @@ class QuestionGroupsResponse(BaseModel):
     status: str
     regrouped_at: str
     groups: list[QuestionGroup]
+
+
+class RouteQuestionRequest(BaseModel):
+    question_id: str
+    question_text: str
+
+
+class RouteResult(BaseModel):
+    status: str  # "routed" | "unrouted" | "error"
+    question_id: str
+    speaker_id: Optional[str] = None
+    similarity_score: Optional[float] = None
+    attempt_number: Optional[int] = None
 
 
 def get_supabase() -> Optional[Client]:
@@ -502,6 +525,171 @@ def run_questions_pipeline(supabase: Optional[Client]) -> list[dict[str, Any]]:
     return _question_group_summaries(group_rows)
 
 
+def _embed_texts(texts: list[str]) -> list[list[float]]:
+    model = get_questions_embedding_model()
+    return model.encode(texts, normalize_embeddings=True).tolist()
+
+
+def _speaker_embedding_text(bio: str, event: Optional[dict]) -> str:
+    """Bio alone is role-level and thin ("VP Supply Chain oversees supply
+    chain strategy...") — the linked event's topic/description is what's
+    actually topic-specific ("Global sourcing strategy, resilience,
+    localization, innovation, cost competitiveness..."), so both go into
+    the text that gets embedded. This is the single source of truth for
+    "what text represents this speaker" — reused by both the lazy
+    background-fill path and the forced recompute script.
+    """
+    parts = [bio.strip()]
+    if event:
+        if event.get("topic"):
+            parts.append(f"Session: {event['topic']}.")
+        if event.get("description"):
+            parts.append(event["description"].strip())
+    return " ".join(parts)
+
+
+def _ensure_speaker_embeddings(supabase: Client) -> None:
+    """Computes + caches embeddings for speakers that don't have one yet.
+
+    Reuses the same multi-qa-mpnet-base-dot-v1 model as question grouping
+    (get_questions_embedding_model) so question and speaker embeddings land
+    in the same vector space and cosine similarity between them means
+    something. Only speakers with embedding IS NULL do any work here — this
+    is the "precomputed, don't recompute on every question" cache
+    speakers.embedding exists for.
+    """
+    # speakers<->event has two FK paths (speakers.event_id, and the
+    # separate event.speaker_id "featured speaker" column) — PostgREST
+    # can't disambiguate a bare "event(...)" embed, so the FK constraint
+    # name is required. speakers_event_uid_fkey is speakers.event_id, the
+    # one that means "the event this speaker row is FOR".
+    resp = (
+        supabase.table(SPEAKERS_TABLE)
+        .select("speaker_id, bio, event!speakers_event_uid_fkey(topic, description)")
+        .is_("embedding", "null")
+        .execute()
+    )
+    rows = [r for r in (resp.data or []) if r.get("bio") and r["bio"].strip()]
+    if not rows:
+        return
+
+    embeddings = _embed_texts([_speaker_embedding_text(r["bio"], r.get("event")) for r in rows])
+    for row, embedding in zip(rows, embeddings):
+        try:
+            supabase.table(SPEAKERS_TABLE).update({"embedding": embedding}).eq(
+                "speaker_id", row["speaker_id"]
+            ).execute()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[nlp-service] Failed to cache embedding for speaker {row['speaker_id']}: {exc}", file=sys.stderr)
+
+
+def route_question(supabase: Client, question_id: str, question_text: str) -> RouteResult:
+    """Routes (or re-routes) one question to the best remaining speaker.
+
+    Called once right after a question is submitted, and again on every
+    decline — both cases are "best speaker not yet attempted for this
+    question_id"; question_routing's existing rows (including the fresh
+    'declined' one from the caller) are what make re-routing automatically
+    exclude speakers already tried. Never touches questions/question_groups.
+    """
+    _ensure_speaker_embeddings(supabase)
+
+    routing_resp = (
+        supabase.table(QUESTION_ROUTING_TABLE)
+        .select("speaker_id, attempt_number")
+        .eq("question_id", question_id)
+        .execute()
+    )
+    prior = routing_resp.data or []
+    attempted = {r["speaker_id"] for r in prior if r.get("speaker_id")}
+    attempt_number = max((r["attempt_number"] for r in prior), default=0) + 1
+
+    # user(first_name, last_name) via the FK on speakers.user_id — safe to
+    # join here since this runs as the service-role client (nlp-service's
+    # get_supabase()), which isn't subject to analytics' narrower RLS on
+    # "user". The name is only ever snapshotted onto question_routing below,
+    # never returned to a client directly from this join.
+    speakers_resp = supabase.table(SPEAKERS_TABLE).select("speaker_id, embedding, user(first_name, last_name)").execute()
+    candidates = [s for s in (speakers_resp.data or []) if s.get("embedding") and s["speaker_id"] not in attempted]
+
+    if not candidates:
+        try:
+            supabase.table(QUESTION_ROUTING_TABLE).insert(
+                {
+                    "question_id": question_id,
+                    "speaker_id": None,
+                    "status": "unrouted",
+                    "attempt_number": attempt_number,
+                    "question_text": question_text,
+                }
+            ).execute()
+        except Exception as exc:  # noqa: BLE001
+            # Partial unique index caps this to one row per question — a
+            # duplicate call racing in (e.g. two declines) is a no-op, not
+            # an error worth surfacing.
+            print(f"[nlp-service] unrouted insert for {question_id} skipped: {exc}", file=sys.stderr)
+        return RouteResult(status="unrouted", question_id=question_id)
+
+    import numpy as np
+
+    def speaker_display_name(speaker: dict) -> Optional[str]:
+        user = speaker.get("user") or {}
+        name = " ".join(part for part in (user.get("first_name"), user.get("last_name")) if part)
+        return name or None
+
+    question_embedding = np.array(_embed_texts([question_text])[0])
+    best_speaker = max(candidates, key=lambda s: float(np.dot(question_embedding, np.array(s["embedding"]))))
+    best_score = float(np.dot(question_embedding, np.array(best_speaker["embedding"])))
+    best_speaker_id = best_speaker["speaker_id"]
+
+    if best_score < MIN_ROUTING_SIMILARITY:
+        # The best candidate available still isn't a confident match — every
+        # other candidate scores lower still (this IS the argmax), so there's
+        # no point sequentially declining through weaker ones one at a time.
+        # similarity_score is kept (unlike the "no candidates left" unrouted
+        # branch above) so analytics can see how close the nearest miss was.
+        try:
+            supabase.table(QUESTION_ROUTING_TABLE).insert(
+                {
+                    "question_id": question_id,
+                    "speaker_id": None,
+                    "status": "unrouted",
+                    "attempt_number": attempt_number,
+                    "similarity_score": best_score,
+                    "question_text": question_text,
+                }
+            ).execute()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[nlp-service] low-confidence unrouted insert for {question_id} skipped: {exc}", file=sys.stderr)
+        return RouteResult(
+            status="unrouted", question_id=question_id, similarity_score=best_score, attempt_number=attempt_number
+        )
+
+    try:
+        supabase.table(QUESTION_ROUTING_TABLE).insert(
+            {
+                "question_id": question_id,
+                "speaker_id": best_speaker_id,
+                "status": "pending",
+                "attempt_number": attempt_number,
+                "similarity_score": best_score,
+                "question_text": question_text,
+                "speaker_name": speaker_display_name(best_speaker),
+            }
+        ).execute()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[nlp-service] Failed to insert routing row for {question_id}: {exc}", file=sys.stderr)
+        return RouteResult(status="error", question_id=question_id)
+
+    return RouteResult(
+        status="routed",
+        question_id=question_id,
+        speaker_id=best_speaker_id,
+        similarity_score=best_score,
+        attempt_number=attempt_number,
+    )
+
+
 @app.get("/api/feedback/topics", response_model=TopicsResponse)
 def get_topics() -> TopicsResponse:
     return fetch_latest_topics(get_supabase())
@@ -521,6 +709,14 @@ def refresh_question_groups() -> QuestionGroupsResponse:
     supabase = get_supabase()
     groups = run_questions_pipeline(supabase)
     return QuestionGroupsResponse(status="ok", regrouped_at=now_iso(), groups=groups)
+
+
+@app.post("/api/questions/route", response_model=RouteResult)
+def route_question_endpoint(payload: RouteQuestionRequest) -> RouteResult:
+    supabase = get_supabase()
+    if supabase is None:
+        return RouteResult(status="error", question_id=payload.question_id)
+    return route_question(supabase, payload.question_id, payload.question_text)
 
 
 if __name__ == "__main__":

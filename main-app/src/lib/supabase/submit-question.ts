@@ -19,7 +19,7 @@ const NLP_SERVICE_URL = "http://localhost:8001";
 export async function submitQuestion(question: string, topic?: string, isAnonymous = false) {
   const supabase = await createClient();
 
-  const { error } = await supabase.rpc("submit_question", {
+  const { data: questionId, error } = await supabase.rpc("submit_question", {
     p_topic: topic ?? null,
     p_question: question,
     p_is_anonymous: isAnonymous,
@@ -30,6 +30,11 @@ export async function submitQuestion(question: string, topic?: string, isAnonymo
   }
 
   fetch(`${NLP_SERVICE_URL}/api/questions/groups/refresh`, { method: "POST" }).catch(() => {});
+  fetch(`${NLP_SERVICE_URL}/api/questions/route`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question_id: questionId, question_text: question }),
+  }).catch(() => {});
 
   return { error: null };
 }

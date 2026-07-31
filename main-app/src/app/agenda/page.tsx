@@ -23,12 +23,14 @@ type SpeakerRow = {
   speaker_id: string;
   event_id: string | null;
   bio: string | null;
-  user: {
-    user_id: string;
-    first_name: string | null;
-    last_name: string | null;
-    company: string | null;
-  } | null;
+  user_id: string | null;
+};
+
+type SpeakerInfoRow = {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  company: string | null;
 };
 
 function formatTimeRange(start: string | null, end: string | null) {
@@ -53,23 +55,29 @@ function initialsOf(name: string) {
 export default async function AgendaPage() {
   const supabase = await createClient();
 
-  const [{ data: events }, { data: speakerRows }] = await Promise.all([
+  const [{ data: events }, { data: speakerRows }, { data: speakerInfoData }] = await Promise.all([
     supabase
       .from("event")
       .select("event_id, event_name, topic, description, status, start_time, end_time")
       .order("start_time", { ascending: true })
       .returns<EventRow[]>(),
-    supabase
-      .from("speakers")
-      .select("speaker_id, event_id, bio, user(user_id, first_name, last_name, company)")
-      .returns<SpeakerRow[]>(),
+    supabase.from("speakers").select("speaker_id, event_id, bio, user_id").returns<SpeakerRow[]>(),
+    // "user" RLS has no policy letting an attendee see another user's name
+    // directly (only own-row / admin) — speaker_public_info() is a narrow
+    // SECURITY DEFINER function that exposes just first_name/last_name/
+    // company for users who are actually speakers, same pattern as
+    // is_admin()/verify_pin() elsewhere in this schema.
+    supabase.rpc("speaker_public_info"),
   ]);
+  const speakerInfoRows = (speakerInfoData ?? []) as SpeakerInfoRow[];
+
+  const infoByUserId = new Map(speakerInfoRows.map((r) => [r.user_id, r]));
 
   const speakerByUser = new Map<string, AgendaSpeaker>();
   const speakerIdsByEvent = new Map<string, string[]>();
 
   for (const row of speakerRows ?? []) {
-    const person = row.user;
+    const person = row.user_id ? infoByUserId.get(row.user_id) : undefined;
     if (!person || !row.event_id) continue;
 
     const name = [person.first_name, person.last_name].filter(Boolean).join(" ") || "Speaker";
@@ -90,9 +98,14 @@ export default async function AgendaPage() {
 
   const sessions: AgendaSession[] = (events ?? []).map((e) => ({
     id: e.event_id,
-    title: e.event_name,
+    // event_name is typed timestamptz in the schema (a pre-existing naming
+    // quirk, see init_schema.sql's header comment) — topic is the actual
+    // session-title text. There's no real venue/room data in this dataset,
+    // so location is left blank rather than showing topic under the wrong
+    // label.
+    title: e.topic ?? "",
     time: formatTimeRange(e.start_time, e.end_time),
-    location: e.topic ?? "",
+    location: "",
     description: e.description ?? "",
     live: e.status === "live",
     speakerIds: speakerIdsByEvent.get(e.event_id) ?? [],
