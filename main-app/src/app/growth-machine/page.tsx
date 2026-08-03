@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import Button from "@mui/material/Button";
 import ConstructionRoundedIcon from "@mui/icons-material/ConstructionRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import {
@@ -53,18 +54,15 @@ function RoleCard({
 }) {
   const Icon = role.icon;
   return (
-    <button
-      type="button"
+    <Button
+      variant={selected ? "contained" : "outlined"}
       onClick={onSelect}
       aria-pressed={selected}
-      className={`flex h-[132px] w-[132px] flex-col items-center justify-center gap-2 rounded-(--radius-card) border-2 transition-colors sm:h-[150px] sm:w-[150px] ${
-        selected
-          ? "border-green bg-green-tint"
-          : "border-grey-200 bg-surface hover:border-grey-400"
-      }`}
+      className="flex h-[132px] w-[132px] flex-col items-center gap-2 sm:h-[150px] sm:w-[150px]"
     >
-      <Icon className={selected ? "text-ink" : "text-grey-500"} sx={{ fontSize: 32 }} />
-    </button>
+      <Icon sx={{ fontSize: 32 }} />
+      {role.label}
+    </Button>
   );
 }
 
@@ -137,16 +135,6 @@ export default function GrowthMachinePage() {
             selected={selectedRole === ROLES[1].id}
             onSelect={() => chooseRole(ROLES[1].id)}
           />
-        </div>
-
-        <div className="-mt-2 flex justify-center gap-8 sm:gap-14">
-          <p className="w-[132px] text-center text-sm font-medium text-ink sm:w-[150px]">
-            {ROLES[0].label}
-          </p>
-          <div className="hidden w-10 sm:block" />
-          <p className="w-[132px] text-center text-sm font-medium text-ink sm:w-[150px]">
-            {ROLES[1].label}
-          </p>
         </div>
 
         {/* grow soaks up the leftover viewport height below the role picker;

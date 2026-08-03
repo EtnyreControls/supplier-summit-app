@@ -17,6 +17,9 @@ import { useSync } from '@tldraw/sync'
 import { inlineBase64AssetStore } from '@tldraw/editor'
 import 'tldraw/tldraw.css'
 import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
+import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded'
+import ArrowForwardIosRoundedIcon from '@mui/icons-material/ArrowForwardIosRounded'
 import { submitGrowthMachineBoard } from '@/lib/supabase/growth-machine'
 
 /**
@@ -51,6 +54,13 @@ function RepositionedToolbar(props: ComponentProps<typeof DefaultToolbar>) {
       data-tour="toolbar"
       style={{ position: 'fixed', bottom: 72, left: '50%', transform: 'translateX(-50%)', pointerEvents: 'all' }}
     >
+      {/* The Select and Sticky note tools are the two most-used here, so pull
+          them to the front of the toolbar (Select first, Sticky right after)
+          instead of tldraw's default alphabetical-ish tool order. */}
+      <style>{`
+        [data-tour="toolbar"] [data-testid="tools.select"] { order: -2; }
+        [data-tour="toolbar"] [data-testid="tools.note"] { order: -1; }
+      `}</style>
       <DefaultToolbar {...props} />
     </div>
   )
@@ -97,6 +107,11 @@ function BuilderFlow({ editor, roomId }: { editor: Editor; roomId: string }) {
   const [pageIds, setPageIds] = React.useState<TLPageId[] | null>(null);
   const [index, setIndex] = React.useState(0);
   const [mode, setMode] = React.useState<'editing' | 'review' | 'submitted'>('editing');
+  // True while editing a single prompt reached via the "Edit" action on the
+  // review screen (or after submitting) — shows a "Done editing" button in
+  // the prompt bar so the builder can jump straight back to review instead
+  // of arrowing through the remaining prompts.
+  const [cameFromReview, setCameFromReview] = React.useState(false);
   const [thumbnails, setThumbnails] = React.useState<Record<string, string>>({});
   const [generating, setGenerating] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -168,6 +183,7 @@ function BuilderFlow({ editor, roomId }: { editor: Editor; roomId: string }) {
   };
 
   const enterReview = async () => {
+    setCameFromReview(false);
     setGenerating(true);
     const entries = await Promise.all(
       pageIds.map(async (id) => {
@@ -221,7 +237,7 @@ function BuilderFlow({ editor, roomId }: { editor: Editor; roomId: string }) {
           Your table&apos;s board is saved — thanks for building!
         </p>
         <Button className="mt-5" variant="outlined" color="secondary" onClick={() => setMode('review')}>
-          Back to review
+          View or edit submission
         </Button>
       </div>
     );
@@ -253,6 +269,7 @@ function BuilderFlow({ editor, roomId }: { editor: Editor; roomId: string }) {
                 color="secondary"
                 onClick={() => {
                   setMode('editing');
+                  setCameFromReview(true);
                   goToPage(i);
                 }}
               >
@@ -285,21 +302,44 @@ function BuilderFlow({ editor, roomId }: { editor: Editor; roomId: string }) {
     <div className="pointer-events-none fixed inset-x-0 z-[400] flex justify-center" style={{ top: 64 }}>
       <div
         data-tour="prompt-banner"
-        className="pointer-events-auto flex items-center gap-3 rounded-(--radius-card) bg-surface px-4 py-2 shadow-lg"
+        className="pointer-events-auto flex items-center gap-3 rounded-(--radius-card) px-4 py-2 shadow-lg"
+        // Always black — the prompt bar needs to read the same regardless of
+        // the builder's light/dark mode preference, so it's pinned rather
+        // than using the theme's (mode-dependent) surface/ink tokens.
+        style={{ backgroundColor: '#000' }}
       >
-        <span className="text-xs font-semibold uppercase tracking-wide text-grey-500">
+        <IconButton
+          size="small"
+          aria-label="Previous prompt"
+          disabled={index === 0}
+          onClick={() => goToPage(index - 1)}
+          sx={{ color: '#fff' }}
+        >
+          <ArrowBackIosNewRoundedIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+        <span className="whitespace-nowrap text-sm font-medium text-white">
           Prompt {index + 1} of {PROMPT_COUNT}
         </span>
-        <span className="text-sm font-medium text-ink">Prompt {index + 1}</span>
-        <Button
+        <IconButton
           size="small"
-          variant="contained"
-          color="primary"
-          disabled={generating}
-          onClick={() => (isLast ? enterReview() : goToPage(index + 1))}
+          aria-label="Next prompt"
+          disabled={isLast}
+          onClick={() => goToPage(index + 1)}
+          sx={{ color: '#fff' }}
         >
-          {isLast ? (generating ? 'Preparing…' : 'Finish') : 'Submit'}
-        </Button>
+          <ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+        {cameFromReview ? (
+          <Button size="small" variant="contained" color="primary" disabled={generating} onClick={enterReview}>
+            {generating ? 'Saving…' : 'Done editing'}
+          </Button>
+        ) : (
+          isLast && (
+            <Button size="small" variant="contained" color="primary" disabled={generating} onClick={enterReview}>
+              {generating ? 'Preparing…' : 'Submit'}
+            </Button>
+          )
+        )}
       </div>
     </div>
   );
@@ -375,7 +415,11 @@ function GrowthMachineCanvas({
         components={components}
         onMount={(ed: Editor) => {
           ed.updateInstanceState({ isReadonly: readOnly });
-          if (readOnly) ed.setCurrentTool('laser');
+          // Spectators are locked to the Laser (their only usable tool,
+          // since hideUi hides the toolbar). Builders default to Sticky note
+          // rather than Select, since that's the primary way of adding
+          // ideas to the board.
+          ed.setCurrentTool(readOnly ? 'laser' : 'note');
           setEditor(ed);
         }}
       />
