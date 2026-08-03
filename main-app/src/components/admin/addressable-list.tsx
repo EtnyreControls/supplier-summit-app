@@ -73,6 +73,8 @@ export function AddressableList({
   countLabel = "asked",
   availableSpeakers,
   onReassignRouting,
+  onDecline,
+  declineLabel = "Decline",
 }: {
   items: AddressableItem[];
   onToggle: (id: string) => void;
@@ -81,12 +83,31 @@ export function AddressableList({
   countLabel?: string;
   availableSpeakers?: AddressableSpeakerOption[]; // present only for Questions (ML routing feature)
   onReassignRouting?: (questionIds: string[], newSpeakerId: string) => void | Promise<void>;
+  // Speaker view only: hands the item to the next-best speaker instead of
+  // answering it. Shown next to Answer/Save while the item is unaddressed —
+  // once answered there's nothing left to decline.
+  onDecline?: (id: string) => void | Promise<void>;
+  declineLabel?: string;
 }) {
   const sorted = sortAddressable(items);
   const openCount = sorted.filter((i) => !i.addressed).length;
   const addressedCount = sorted.length - openCount;
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [reassigning, setReassigning] = React.useState<Set<string>>(new Set());
+  const [declining, setDeclining] = React.useState<Set<string>>(new Set());
+  const handleDecline = async (id: string) => {
+    if (!onDecline) return;
+    setDeclining((prev) => new Set(prev).add(id));
+    try {
+      await onDecline(id);
+    } finally {
+      setDeclining((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
   const handleReassign = async (item: AddressableItem, newSpeakerId: string) => {
     if (!onReassignRouting || !newSpeakerId) return;
     setReassigning((prev) => new Set(prev).add(item.id));
@@ -323,6 +344,19 @@ export function AddressableList({
                         {item.answerText ? "Edit answer" : "Answer"}
                       </Button>
                     )}
+                  </div>
+                )}
+                {onDecline && !item.addressed && (
+                  <div className="mt-1.5">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      disabled={declining.has(item.id)}
+                      onClick={() => handleDecline(item.id)}
+                    >
+                      {declining.has(item.id) ? "Declining…" : declineLabel}
+                    </Button>
                   </div>
                 )}
               </div>

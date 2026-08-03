@@ -139,6 +139,22 @@ const theme = createTheme({
               },
             },
             {
+              // Same contrast failure as the text-variant case above, just
+              // for outlined ghost buttons — a bare <Button variant="outlined">
+              // (no color) also defaults to "primary" and renders a yellow
+              // border/text combo that fails contrast (see /speaker's
+              // Decline button, which hit this before color="secondary" was
+              // added explicitly there). Remap the default here too so
+              // omitting color is safe everywhere, not just at that one
+              // call site.
+              props: { variant: "outlined", color: "primary" },
+              style: {
+                color: v.ink,
+                borderColor: v.grey(300),
+                "&:hover": { borderColor: v.ink, backgroundColor: v.grey(50) },
+              },
+            },
+            {
               props: { variant: "outlined", color: "secondary" },
               style: {
                 borderColor: v.grey(300),
