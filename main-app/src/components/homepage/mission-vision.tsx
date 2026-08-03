@@ -57,13 +57,18 @@ export function MissionVision() {
             centered as a group. Fixed (not flex-1) width — a hexagon reads as a
             hexagon at a width close to its height; stretching it edge-to-edge of
             the row is what made it look like a banner instead of a hexagon. */}
-        <div className="mt-10 hidden items-start justify-center gap-8 sm:flex">
+        {/* items-stretch (not items-start): Mission/Vision bodies differ in
+            length, so content-fit height would make the shapes uneven —
+            stretching to match the taller one's height keeps both hexagons
+            the same size while the translate-y below still staggers them
+            visually (transform doesn't affect layout height). */}
+        <div className="mt-10 hidden items-stretch justify-center gap-8 sm:flex">
           <HexHalfStatic statement={MISSION} tone="yellow" point="left" widthPx={400} className="shrink-0 -translate-y-4" />
           <HexHalfStatic statement={VISION} tone="grey" point="right" widthPx={400} className="shrink-0 translate-y-5" />
         </div>
 
-        {/* Mobile: hexagon halves, rejoined (no gap), slight vertical offset, tap-to-flip */}
-        <div className="mt-10 flex items-start sm:hidden">
+        {/* Mobile: hexagon halves, slight vertical offset, tap-to-flip */}
+        <div className="mt-10 flex items-start gap-3 sm:hidden">
           <HexHalfFlip
             statement={MISSION}
             tone="yellow"

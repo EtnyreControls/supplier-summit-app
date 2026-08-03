@@ -49,33 +49,6 @@ function statusChip(status: string) {
 
 type Filter = "all" | "answered" | "pending";
 
-/* Answers that arrived since the attendee last looked get an amber ring +
-   "New answer" pill (amber = attention, matching the agenda's live
-   treatment). "Seen" is tracked per-device in localStorage: ids are added
-   when the attendee expands the card. Read in an effect (not render) so
-   server and first client render agree — everything starts un-fresh and
-   the rings appear after hydration. */
-const SEEN_KEY = "summit-seen-answers";
-
-function readSeen(): Set<string> {
-  try {
-    const raw = window.localStorage.getItem(SEEN_KEY);
-    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function markSeen(id: string) {
-  try {
-    const seen = readSeen();
-    seen.add(id);
-    window.localStorage.setItem(SEEN_KEY, JSON.stringify([...seen]));
-  } catch {
-    /* storage unavailable (private mode etc.) — glow just reappears next visit */
-  }
-}
-
 /** An attendee's own submitted questions. Answered ones float to the top
  * (most useful first); order is otherwise preserved (most recent first,
  * per the server query), via a stable sort. Answers collapse behind a tap
@@ -84,18 +57,6 @@ function markSeen(id: string) {
 export function MyQuestionsList({ questions }: { questions: SubmittedQuestion[] }) {
   const [filter, setFilter] = React.useState<Filter>("all");
   const [openIds, setOpenIds] = React.useState<Set<string>>(new Set());
-  const [freshIds, setFreshIds] = React.useState<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    const seen = readSeen();
-    setFreshIds(
-      new Set(
-        questions
-          .filter((q) => q.status === "answered" && q.answerText && !seen.has(q.id))
-          .map((q) => q.id),
-      ),
-    );
-  }, [questions]);
 
   const answeredCount = questions.filter((q) => q.status === "answered").length;
   const pendingCount = questions.length - answeredCount;
@@ -116,12 +77,6 @@ export function MyQuestionsList({ questions }: { questions: SubmittedQuestion[] 
         next.delete(q.id);
       } else {
         next.add(q.id);
-        markSeen(q.id);
-        setFreshIds((fresh) => {
-          const f = new Set(fresh);
-          f.delete(q.id);
-          return f;
-        });
       }
       return next;
     });
@@ -179,15 +134,9 @@ export function MyQuestionsList({ questions }: { questions: SubmittedQuestion[] 
         const answered = q.status === "answered";
         const expandable = answered && !!q.answerText;
         const open = openIds.has(q.id);
-        const fresh = freshIds.has(q.id);
 
         const body = (
           <>
-            {fresh && (
-              <span className="self-start rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white">
-                New answer
-              </span>
-            )}
             <div className="flex items-start justify-between gap-3">
               <p className="text-[14px] text-ink">{q.text}</p>
               <span className="flex shrink-0 items-center">
@@ -224,9 +173,7 @@ export function MyQuestionsList({ questions }: { questions: SubmittedQuestion[] 
             type="button"
             onClick={() => toggle(q)}
             aria-expanded={open}
-            className={`flex w-full cursor-pointer flex-col gap-2 p-3.5 text-left transition-colors hover:border-grey-400 ${
-              fresh ? "ring-2 ring-amber-500" : ""
-            }`}
+            className="flex w-full cursor-pointer flex-col gap-2 p-3.5 text-left transition-colors hover:border-grey-400"
           >
             {body}
           </Card>

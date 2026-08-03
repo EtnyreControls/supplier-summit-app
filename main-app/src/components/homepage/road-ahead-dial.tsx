@@ -1,5 +1,8 @@
 "use client";
 import * as React from "react";
+import IconButton from "@mui/material/IconButton";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { CONTAINER } from "../layout";
 
 /**
@@ -56,10 +59,16 @@ export function RoadAheadDial({ steps = STEPS }: { steps?: Step[] }) {
 
   const radius = isDesktop ? RADIUS_DESKTOP : RADIUS_MOBILE;
   const active = steps[activeIndex];
+  const goPrev = () => setActiveIndex((i) => (i - 1 + steps.length) % steps.length);
+  const goNext = () => setActiveIndex((i) => (i + 1) % steps.length);
 
   return (
     <section className={`${CONTAINER} py-12 lg:py-16`}>
       <div className="mx-auto flex flex-col items-center">
+        <p className="mb-4 text-center text-[11px] font-medium uppercase tracking-wide text-grey-400">
+          <span className="hidden sm:inline">Click a step on the dial for details</span>
+          <span className="sm:hidden">Tap a step on the dial for details</span>
+        </p>
         <div className="relative" style={{ width: radius * 2 + 56, height: radius * 2 + 56 }}>
           <svg
             className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
@@ -111,20 +120,40 @@ export function RoadAheadDial({ steps = STEPS }: { steps?: Step[] }) {
           </div>
         </div>
 
-        <div
-          className={`mt-6 w-full rounded-(--radius-card) border border-grey-200 bg-surface text-center shadow-sm ${
-            isDesktop ? "max-w-[420px] p-6" : "max-w-[320px] p-4"
-          }`}
-        >
-          <p className={`font-bold text-grey-500 ${isDesktop ? "text-[14px]" : "text-[13px]"}`}>
-            {String(active.number).padStart(2, "0")}
-          </p>
-          <p className={`mt-0.5 font-semibold text-ink ${isDesktop ? "text-[18px]" : "text-[15px]"}`}>
-            {active.title}
-          </p>
-          <p className={`mt-1 leading-relaxed text-grey-600 ${isDesktop ? "text-[15px]" : "text-[13px]"}`}>
-            {active.description}
-          </p>
+        <div className="mt-6 flex w-full items-center justify-center gap-2">
+          <IconButton
+            aria-label="Previous step"
+            onClick={goPrev}
+            size="small"
+            sx={{ color: "var(--color-ink)", border: "1px solid var(--color-grey-300)", flexShrink: 0 }}
+          >
+            <ChevronLeftIcon fontSize="small" />
+          </IconButton>
+
+          <div
+            className={`rounded-(--radius-card) border border-grey-200 bg-surface text-center shadow-sm ${
+              isDesktop ? "max-w-[420px] p-6" : "max-w-[320px] p-4"
+            }`}
+          >
+            <p className={`font-bold text-grey-500 ${isDesktop ? "text-[14px]" : "text-[13px]"}`}>
+              {String(active.number).padStart(2, "0")}
+            </p>
+            <p className={`mt-0.5 font-semibold text-ink ${isDesktop ? "text-[18px]" : "text-[15px]"}`}>
+              {active.title}
+            </p>
+            <p className={`mt-1 leading-relaxed text-grey-600 ${isDesktop ? "text-[15px]" : "text-[13px]"}`}>
+              {active.description}
+            </p>
+          </div>
+
+          <IconButton
+            aria-label="Next step"
+            onClick={goNext}
+            size="small"
+            sx={{ color: "var(--color-ink)", border: "1px solid var(--color-grey-300)", flexShrink: 0 }}
+          >
+            <ChevronRightIcon fontSize="small" />
+          </IconButton>
         </div>
       </div>
     </section>

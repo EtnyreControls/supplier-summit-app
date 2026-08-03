@@ -52,6 +52,10 @@ export function OurValues() {
       <p className="mx-auto mt-2 max-w-md text-center text-sm text-grey-600">
         Five core values guide our behaviors in pursuit of our vision and mission.
       </p>
+      <p className="mt-1 text-center text-[11px] font-medium uppercase tracking-wide text-grey-400">
+        <span className="hidden sm:inline">Hover a value to learn more</span>
+        <span className="sm:hidden">Tap a value to learn more</span>
+      </p>
 
       {/* Desktop: single horizontal row, hover to reveal */}
       <div className="mt-10 hidden items-start justify-between gap-4 sm:flex">

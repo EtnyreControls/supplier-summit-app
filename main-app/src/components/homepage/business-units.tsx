@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Box, Typography, IconButton } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CachedRoundedIcon from '@mui/icons-material/CachedRounded';
 
 interface Brand {
   name: string;
@@ -166,6 +167,25 @@ function FlipCard({ unit, showBrandsOnBack }: { unit: BusinessUnit; showBrandsOn
       >
         {unit.name}
       </Typography>
+      {/* Signage that this card flips — same "tap/click to reveal" cue as
+          the Mission/Vision hexagons' "↻ tap" hint, placed below the name
+          rather than overlaid on the hexagon itself. */}
+      <Box
+        sx={{
+          mt: 0.75,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          color: 'var(--color-grey-500)',
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          textTransform: 'uppercase',
+        }}
+      >
+        <CachedRoundedIcon sx={{ fontSize: 12 }} />
+        Tap to flip
+      </Box>
     </Box>
   );
 }

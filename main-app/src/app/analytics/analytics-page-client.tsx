@@ -3,6 +3,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import Badge from "@mui/material/Badge";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import QuestionAnswerRoundedIcon from "@mui/icons-material/QuestionAnswerRounded";
@@ -142,6 +143,7 @@ export function AnalyticsPageClient({
   initialQuestions,
   initialFeedbackTopics,
   unroutedCount,
+  declinedCount,
   availableSpeakers,
   growthMachineTables,
   growthMachineBoards,
@@ -149,6 +151,7 @@ export function AnalyticsPageClient({
   initialQuestions: AddressableItem[];
   initialFeedbackTopics: FeedbackTopicsResponse;
   unroutedCount: number;
+  declinedCount: number;
   availableSpeakers: AddressableSpeakerOption[];
   growthMachineTables: GrowthMachineTableProgress[];
   growthMachineBoards: GrowthMachineBoardSummary[];
@@ -287,6 +290,27 @@ export function AnalyticsPageClient({
 
   const questionsOpen = questions.filter((q) => !q.addressed).length;
   const feedbackOpen = feedbackTopics.topics.filter((t) => !t.addressed).length;
+  // Both need a human to go do something (reassign, or otherwise follow up)
+  // — surfaced together as one badge on the Questions tab, same pairing the
+  // in-list highlight (AddressableList) and the banner below use.
+  const questionsNeedingAttention = unroutedCount + declinedCount;
+
+  // Only the Questions tab has a count today — a lookup (not inlined at each
+  // render site) so both the desktop sidebar and mobile Tabs stay in sync if
+  // another section ever gets its own badge.
+  const sectionBadgeCount: Partial<Record<SectionKey, number>> = { questions: questionsNeedingAttention };
+  const sectionIcon = (s: (typeof SECTIONS)[number]) => {
+    const count = sectionBadgeCount[s.key] ?? 0;
+    if (count === 0) return s.icon;
+    return (
+      <Badge
+        badgeContent={count}
+        sx={{ "& .MuiBadge-badge": { backgroundColor: "var(--color-amber-500)", color: "#fff" } }}
+      >
+        {s.icon}
+      </Badge>
+    );
+  };
   const tablesBuilding = growthMachineTables.filter((t) => t.status === "building").length;
   const tablesSubmitted = growthMachineTables.filter((t) => t.status === "submitted").length;
 
@@ -323,7 +347,7 @@ export function AnalyticsPageClient({
                       : "border-transparent text-grey-700 hover:bg-grey-50"
                   }`}
                 >
-                  <span className={active ? "text-ink" : "text-grey-500"}>{s.icon}</span>
+                  <span className={active ? "text-ink" : "text-grey-500"}>{sectionIcon(s)}</span>
                   {s.label}
                 </button>
               );
@@ -341,7 +365,7 @@ export function AnalyticsPageClient({
               aria-label="Analytics sections"
             >
               {SECTIONS.map((s) => (
-                <Tab key={s.key} value={s.key} icon={s.icon} iconPosition="start" label={s.label} sx={{ minHeight: 44 }} />
+                <Tab key={s.key} value={s.key} icon={sectionIcon(s)} iconPosition="start" label={s.label} sx={{ minHeight: 44 }} />
               ))}
             </Tabs>
           </div>
@@ -371,10 +395,18 @@ export function AnalyticsPageClient({
                     </Button>
                   }
                 />
-                {unroutedCount > 0 && (
+                {(unroutedCount > 0 || declinedCount > 0) && (
                   <div className="mb-4">
                     <Banner>
-                      {`${unroutedCount} question${unroutedCount === 1 ? "" : "s"} exhausted every speaker and couldn't be routed — sorted to the top below, ready to reassign.`}
+                      {[
+                        unroutedCount > 0 &&
+                          `${unroutedCount} question${unroutedCount === 1 ? "" : "s"} exhausted every speaker and couldn't be routed`,
+                        declinedCount > 0 &&
+                          `${declinedCount} question${declinedCount === 1 ? "" : "s"} ${declinedCount === 1 ? "was" : "were"} declined by ${declinedCount === 1 ? "its" : "their"} assigned speaker`,
+                      ]
+                        .filter(Boolean)
+                        .join("; ")}
+                      {" — highlighted below, ready to reassign."}
                     </Banner>
                   </div>
                 )}

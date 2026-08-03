@@ -194,6 +194,10 @@ export default async function AnalyticsPage() {
   // exhausted attempt row still exists for the audit trail, but it's no
   // longer the CURRENT state, so it must not still count here.
   const unroutedCount = initialQuestions.filter((q) => q.routing?.status === "unrouted").length;
+  // Same "current attempt only" logic as unroutedCount — a question can
+  // have an old declined attempt in its history but be pending/accepted
+  // elsewhere now (re-routed since), so only the latest attempt counts.
+  const declinedCount = initialQuestions.filter((q) => q.routing?.status === "declined").length;
 
   const { data: latestRun } = await supabase
     .from("feedback_topic_runs")
@@ -298,6 +302,7 @@ export default async function AnalyticsPage() {
       initialQuestions={initialQuestions}
       initialFeedbackTopics={initialFeedbackTopics}
       unroutedCount={unroutedCount}
+      declinedCount={declinedCount}
       availableSpeakers={availableSpeakers}
       growthMachineTables={growthMachineTables}
       growthMachineBoards={growthMachineBoards}
