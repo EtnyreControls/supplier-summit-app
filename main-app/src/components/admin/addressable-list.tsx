@@ -206,7 +206,7 @@ export function AddressableList({
               />
               <div className="min-w-0 flex-1">
                 <p
-                  className={`text-[14px] leading-relaxed text-ink ${
+                  className={`text-[16px] font-medium leading-relaxed text-ink ${
                     item.addressed ? "text-grey-500 line-through" : ""
                   }`}
                 >
@@ -275,6 +275,8 @@ export function AddressableList({
                         sx={{
                           backgroundColor: "var(--color-amber-100)",
                           color: "var(--color-amber-900)",
+                          fontSize: 13,
+                          fontWeight: 600,
                           "& .MuiChip-icon": { color: "var(--color-amber-900)" },
                         }}
                       />
@@ -340,7 +342,7 @@ export function AddressableList({
                         </div>
                       </div>
                     ) : (
-                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5 }} onClick={() => startAnswering(item)}>
+                      <Button size="small" variant="outlined" onClick={() => startAnswering(item)}>
                         {item.answerText ? "Edit answer" : "Answer"}
                       </Button>
                     )}
@@ -361,8 +363,8 @@ export function AddressableList({
                 )}
               </div>
               <div className="flex shrink-0 flex-col items-center pl-1">
-                <span className="text-xs font-semibold text-ink">{item.count}</span>
-                <span className="text-[10px] text-grey-500">{countLabel}</span>
+                <span className="text-base font-bold text-ink">{item.count}</span>
+                <span className="text-xs font-medium text-grey-500">{countLabel}</span>
               </div>
             </Card>
           </React.Fragment>

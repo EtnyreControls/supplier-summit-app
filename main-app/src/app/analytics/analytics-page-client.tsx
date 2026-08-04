@@ -162,6 +162,7 @@ export function AnalyticsPageClient({
   const { profileModal, openProfile } = useProfileModal();
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const [section, setSection] = React.useState<SectionKey>("questions");
+  const [questionsTab, setQuestionsTab] = React.useState<"attention" | "general">("attention");
   const [questions, setQuestions] = React.useState(initialQuestions);
   const [feedbackTopics, setFeedbackTopics] = React.useState(initialFeedbackTopics);
   const [regrouping, setRegrouping] = React.useState(false);
@@ -288,6 +289,16 @@ export function AnalyticsPageClient({
     setViewerSnapshot(snapshot);
   };
 
+  // Split into two worklists so it's clear at a glance what just needs an
+  // answer vs. what needs a human to intervene on routing (unrouted, or
+  // declined by the speaker it was sent to).
+  const routingAttentionQuestions = questions.filter(
+    (q) => q.routing?.status === "unrouted" || q.routing?.status === "declined"
+  );
+  const generalQuestions = questions.filter(
+    (q) => !(q.routing?.status === "unrouted" || q.routing?.status === "declined")
+  );
+
   const questionsOpen = questions.filter((q) => !q.addressed).length;
   const feedbackOpen = feedbackTopics.topics.filter((t) => !t.addressed).length;
   // Both need a human to go do something (reassign, or otherwise follow up)
@@ -410,14 +421,47 @@ export function AnalyticsPageClient({
                     </Banner>
                   </div>
                 )}
-                <AddressableList
-                  items={questions}
-                  onToggle={toggleQuestion}
-                  onRemoveGroupItem={handleRemoveGroupItem}
-                  onSubmitAnswer={handleSubmitAnswer}
-                  availableSpeakers={availableSpeakers}
-                  onReassignRouting={handleReassignRouting}
-                />
+                <Tabs
+                  value={questionsTab}
+                  onChange={(_, v: "attention" | "general") => setQuestionsTab(v)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  allowScrollButtonsMobile
+                  aria-label="Question worklists"
+                  sx={{ mb: 2, minHeight: 40, "& .MuiTab-root": { minHeight: 40 } }}
+                >
+                  <Tab
+                    value="attention"
+                    label={`Needs routing attention (${routingAttentionQuestions.length})`}
+                  />
+                  <Tab value="general" label={`General (${generalQuestions.length})`} />
+                </Tabs>
+                {questionsTab === "attention" ? (
+                  routingAttentionQuestions.length === 0 ? (
+                    <EmptyState
+                      title="Nothing needs routing attention"
+                      body="Unrouted and declined questions will show up here."
+                    />
+                  ) : (
+                    <AddressableList
+                      items={routingAttentionQuestions}
+                      onToggle={toggleQuestion}
+                      onRemoveGroupItem={handleRemoveGroupItem}
+                      onSubmitAnswer={handleSubmitAnswer}
+                      availableSpeakers={availableSpeakers}
+                      onReassignRouting={handleReassignRouting}
+                    />
+                  )
+                ) : (
+                  <AddressableList
+                    items={generalQuestions}
+                    onToggle={toggleQuestion}
+                    onRemoveGroupItem={handleRemoveGroupItem}
+                    onSubmitAnswer={handleSubmitAnswer}
+                    availableSpeakers={availableSpeakers}
+                    onReassignRouting={handleReassignRouting}
+                  />
+                )}
               </>
             )}
 

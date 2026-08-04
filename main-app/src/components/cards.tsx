@@ -51,7 +51,7 @@ export function SessionCard({
   );
 }
 
-/** Speaker with expandable bio (per the "expand speaker to view details" story). */
+/** Speaker card with bio shown up front (no click needed to read it). */
 export function SpeakerCard({
   name,
   role,
@@ -65,25 +65,18 @@ export function SpeakerCard({
   bio?: string;
   photoUrl?: string;
 }) {
-  const [open, setOpen] = React.useState(false);
   return (
-    <Card>
-      <CardActionArea
-        onClick={() => bio && setOpen((o) => !o)}
-        className="p-4"
-        aria-expanded={open}
-      >
-        <div className="flex items-center gap-3">
-          <Avatar src={photoUrl} sx={{ width: 46, height: 46 }}>
-            {initials}
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold text-ink">{name}</p>
-            <p className="truncate text-[13px] text-grey-600">{role}</p>
-          </div>
+    <Card className="p-4">
+      <div className="flex items-center gap-3">
+        <Avatar src={photoUrl} sx={{ width: 46, height: 46 }}>
+          {initials}
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold text-ink">{name}</p>
+          <p className="truncate text-[13px] text-grey-600">{role}</p>
         </div>
-        {bio && open && <p className="mt-3 text-[13px] leading-relaxed text-grey-700">{bio}</p>}
-      </CardActionArea>
+      </div>
+      {bio && <p className="mt-3 text-[13px] leading-relaxed text-grey-700">{bio}</p>}
     </Card>
   );
 }
