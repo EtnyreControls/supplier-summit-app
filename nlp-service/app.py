@@ -62,6 +62,33 @@ QUESTION_SIMILARITY_THRESHOLD = 0.65
 
 SPEAKERS_TABLE = "speakers"
 QUESTION_ROUTING_TABLE = "question_routing"
+# The fixed speakers row analytics_logistics_speaker.sql seeds — not a real
+# person (user_id/event_id both null on that row), just a stable routing
+# target. Used both as its own tag destination (General, Growth Machine,
+# Walk Gallery — see TAG_SPEAKER_IDS) and as the universal escalation step
+# for every other tag, so any tag's chain always has somewhere to land.
+ANALYTICS_SPEAKER_ID = "00000000-0000-0000-0000-00000000a17c"
+# Attendee-picked topic tag (QUESTION_TOPICS in question-fab.tsx, lowercased)
+# -> that session's dedicated speaker_id. Looked up straight from the real
+# agenda (see event table) rather than guessed: e.g. "Supplier Connection
+# Challenge" matches the "Registration, Breakfast, Networking & Supplier
+# Connection Challenge (Icebreaker)" session's speaker. Tags absent here
+# (Strategic Partnership today — that session has no speaker assigned in the
+# database yet) fall straight through to the Analytics escalation step in
+# route_question, same as a tag that IS mapped but already declined.
+TAG_SPEAKER_IDS = {
+    "general": ANALYTICS_SPEAKER_ID,
+    "growth machine": ANALYTICS_SPEAKER_ID,
+    # No per-unit tags yet (Etnyre/BearCat/SMF/Hendrick each need their own
+    # speaker, pending a stakeholder decision) — routes to Analytics, who
+    # can manually reassign to the right unit's speaker via the existing
+    # Reassign dropdown.
+    "walk gallery": ANALYTICS_SPEAKER_ID,
+    "supplier connection challenge": "60157b0c-c694-4f19-b1d7-c51732762ab8",
+    "summit objectives": "31be750c-fd1c-494a-9bdb-816cd7f59cb1",
+    "executive growth strategy": "f774ab2c-2ac9-4125-b1b4-cc89076ea4ba",
+    "global growth": "e759a745-73c1-45db-824e-c0ac0e5dc215",
+}
 # Calibrated against real questions/speaker bios in this deployment (see
 # the routing-feature migration history) — cosine similarity here mostly
 # lands in a 0.22-0.39 band with no clean bimodal split, so this isn't a
@@ -530,16 +557,36 @@ def _embed_texts(texts: list[str]) -> list[list[float]]:
     return model.encode(texts, normalize_embeddings=True).tolist()
 
 
+# A full bio is self-described role scope, not curated session content — a
+# broad title ("VP Supply Chain oversees supply chain strategy...") shares
+# vocabulary with nearly every question in that domain, so it was winning
+# matches on breadth alone rather than actual session relevance (see the
+# "when is lunch" -> "breakfast logistics" bio mismatch). The real fix is
+# routing by session/agenda content instead of bio (tracked separately,
+# pending the topic-tag redesign) — this is a stopgap: clip the bio short
+# so it still adds a little identity/context but can no longer out-mass the
+# event topic/description, which stays untruncated as the primary signal.
+BIO_EMBEDDING_CHAR_LIMIT = 60
+
+
+def _truncate_bio(bio: str) -> str:
+    bio = bio.strip()
+    if len(bio) <= BIO_EMBEDDING_CHAR_LIMIT:
+        return bio
+    # Cut at the last word boundary within the limit rather than mid-word.
+    clipped = bio[:BIO_EMBEDDING_CHAR_LIMIT].rsplit(" ", 1)[0]
+    return f"{clipped}..."
+
+
 def _speaker_embedding_text(bio: str, event: Optional[dict]) -> str:
-    """Bio alone is role-level and thin ("VP Supply Chain oversees supply
-    chain strategy...") — the linked event's topic/description is what's
-    actually topic-specific ("Global sourcing strategy, resilience,
-    localization, innovation, cost competitiveness..."), so both go into
-    the text that gets embedded. This is the single source of truth for
-    "what text represents this speaker" — reused by both the lazy
-    background-fill path and the forced recompute script.
+    """The linked event's topic/description is what's actually
+    topic-specific ("Global sourcing strategy, resilience, localization,
+    innovation, cost competitiveness...") — bio is included only as a
+    clipped identity hint (see _truncate_bio), not full context. This is the
+    single source of truth for "what text represents this speaker" — reused
+    by both the lazy background-fill path and the forced recompute script.
     """
-    parts = [bio.strip()]
+    parts = [_truncate_bio(bio)]
     if event:
         if event.get("topic"):
             parts.append(f"Session: {event['topic']}.")
@@ -584,16 +631,28 @@ def _ensure_speaker_embeddings(supabase: Client) -> None:
 
 
 def route_question(supabase: Client, question_id: str, question_text: str) -> RouteResult:
-    """Routes (or re-routes) one question to the best remaining speaker.
+    """Routes (or re-routes) one question via its attendee-picked topic tag.
 
     Called once right after a question is submitted, and again on every
-    decline — both cases are "best speaker not yet attempted for this
-    question_id"; question_routing's existing rows (including the fresh
-    'declined' one from the caller) are what make re-routing automatically
-    exclude speakers already tried. Never touches questions/question_groups.
-    """
-    _ensure_speaker_embeddings(supabase)
+    decline. Routing is a deterministic chain per tag (see TAG_SPEAKER_IDS):
+    the tag's dedicated speaker (if any), then Analytics as a universal
+    escalation step, then unrouted if both are already attempted/declined —
+    "the deterministic guess was wrong" and "no single speaker fits" land in
+    the same place, a human sorts it out.
 
+    An untagged question (topic null/blank) is treated exactly like
+    "General": QUESTION_TOPICS (question-fab.tsx) leaves the picker blank by
+    default rather than pre-selecting General, specifically so the two cases
+    can be told apart in questions.topic for reporting — they still need the
+    same safe destination either way. Never touches questions/question_groups.
+
+    Bio/session-similarity matching (the previous approach) has been
+    retired now that every tag has an explicit destination — see git
+    history for that implementation if it's ever needed again; the
+    now-unused embedding helpers (_ensure_speaker_embeddings,
+    _speaker_embedding_text, _truncate_bio) and speakers.embedding column
+    are left in place pending a decision on removing them outright.
+    """
     routing_resp = (
         supabase.table(QUESTION_ROUTING_TABLE)
         .select("speaker_id, attempt_number")
@@ -609,85 +668,71 @@ def route_question(supabase: Client, question_id: str, question_text: str) -> Ro
     # get_supabase()), which isn't subject to analytics' narrower RLS on
     # "user". The name is only ever snapshotted onto question_routing below,
     # never returned to a client directly from this join.
-    speakers_resp = supabase.table(SPEAKERS_TABLE).select("speaker_id, embedding, user(first_name, last_name)").execute()
-    candidates = [s for s in (speakers_resp.data or []) if s.get("embedding") and s["speaker_id"] not in attempted]
-
-    if not candidates:
-        try:
-            supabase.table(QUESTION_ROUTING_TABLE).insert(
-                {
-                    "question_id": question_id,
-                    "speaker_id": None,
-                    "status": "unrouted",
-                    "attempt_number": attempt_number,
-                    "question_text": question_text,
-                }
-            ).execute()
-        except Exception as exc:  # noqa: BLE001
-            # Partial unique index caps this to one row per question — a
-            # duplicate call racing in (e.g. two declines) is a no-op, not
-            # an error worth surfacing.
-            print(f"[nlp-service] unrouted insert for {question_id} skipped: {exc}", file=sys.stderr)
-        return RouteResult(status="unrouted", question_id=question_id)
-
-    import numpy as np
+    speakers_resp = supabase.table(SPEAKERS_TABLE).select("speaker_id, user(first_name, last_name)").execute()
 
     def speaker_display_name(speaker: dict) -> Optional[str]:
         user = speaker.get("user") or {}
         name = " ".join(part for part in (user.get("first_name"), user.get("last_name")) if part)
         return name or None
 
-    question_embedding = np.array(_embed_texts([question_text])[0])
-    best_speaker = max(candidates, key=lambda s: float(np.dot(question_embedding, np.array(s["embedding"]))))
-    best_score = float(np.dot(question_embedding, np.array(best_speaker["embedding"])))
-    best_speaker_id = best_speaker["speaker_id"]
+    name_by_speaker_id = {s["speaker_id"]: speaker_display_name(s) for s in (speakers_resp.data or [])}
 
-    if best_score < MIN_ROUTING_SIMILARITY:
-        # The best candidate available still isn't a confident match — every
-        # other candidate scores lower still (this IS the argmax), so there's
-        # no point sequentially declining through weaker ones one at a time.
-        # similarity_score is kept (unlike the "no candidates left" unrouted
-        # branch above) so analytics can see how close the nearest miss was.
+    question_resp = (
+        supabase.table(QUESTIONS_TABLE).select("topic").eq("question_id", question_id).maybe_single().execute()
+    )
+    topic = (question_resp.data or {}).get("topic") if question_resp and question_resp.data else None
+    tag_key = (topic or "").strip().lower() or "general"
+
+    chain = []
+    mapped_speaker_id = TAG_SPEAKER_IDS.get(tag_key)
+    if mapped_speaker_id:
+        chain.append(mapped_speaker_id)
+    if ANALYTICS_SPEAKER_ID not in chain:
+        chain.append(ANALYTICS_SPEAKER_ID)
+    next_speaker_id = next((s for s in chain if s not in attempted), None)
+
+    if next_speaker_id:
+        speaker_name = (
+            "Analytics team (logistics)"
+            if next_speaker_id == ANALYTICS_SPEAKER_ID
+            else name_by_speaker_id.get(next_speaker_id)
+        )
         try:
             supabase.table(QUESTION_ROUTING_TABLE).insert(
                 {
                     "question_id": question_id,
-                    "speaker_id": None,
-                    "status": "unrouted",
+                    "speaker_id": next_speaker_id,
+                    "status": "pending",
                     "attempt_number": attempt_number,
-                    "similarity_score": best_score,
                     "question_text": question_text,
+                    "speaker_name": speaker_name,
                 }
             ).execute()
         except Exception as exc:  # noqa: BLE001
-            print(f"[nlp-service] low-confidence unrouted insert for {question_id} skipped: {exc}", file=sys.stderr)
+            print(f"[nlp-service] Failed to route tagged question {question_id}: {exc}", file=sys.stderr)
+            return RouteResult(status="error", question_id=question_id)
         return RouteResult(
-            status="unrouted", question_id=question_id, similarity_score=best_score, attempt_number=attempt_number
+            status="routed", question_id=question_id, speaker_id=next_speaker_id, attempt_number=attempt_number
         )
 
+    # Chain exhausted (the tag's speaker and Analytics were both already
+    # attempted/declined) — no deterministic destination left.
     try:
         supabase.table(QUESTION_ROUTING_TABLE).insert(
             {
                 "question_id": question_id,
-                "speaker_id": best_speaker_id,
-                "status": "pending",
+                "speaker_id": None,
+                "status": "unrouted",
                 "attempt_number": attempt_number,
-                "similarity_score": best_score,
                 "question_text": question_text,
-                "speaker_name": speaker_display_name(best_speaker),
             }
         ).execute()
     except Exception as exc:  # noqa: BLE001
-        print(f"[nlp-service] Failed to insert routing row for {question_id}: {exc}", file=sys.stderr)
-        return RouteResult(status="error", question_id=question_id)
-
-    return RouteResult(
-        status="routed",
-        question_id=question_id,
-        speaker_id=best_speaker_id,
-        similarity_score=best_score,
-        attempt_number=attempt_number,
-    )
+        # Partial unique index caps this to one row per question — a
+        # duplicate call racing in (e.g. two declines) is a no-op, not an
+        # error worth surfacing.
+        print(f"[nlp-service] tagged unrouted insert for {question_id} skipped: {exc}", file=sys.stderr)
+    return RouteResult(status="unrouted", question_id=question_id, attempt_number=attempt_number)
 
 
 @app.get("/api/feedback/topics", response_model=TopicsResponse)
