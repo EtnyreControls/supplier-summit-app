@@ -21,6 +21,7 @@ import IconButton from '@mui/material/IconButton'
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded'
 import ArrowForwardIosRoundedIcon from '@mui/icons-material/ArrowForwardIosRounded'
 import { submitGrowthMachineBoard } from '@/lib/supabase/growth-machine'
+import { AsphaltDistributorLoader } from './asphalt-distributor-loader'
 
 /**
  * Base URL of the deployed sync-server Worker (see /sync-server), e.g.
@@ -393,6 +394,25 @@ function SyncedGrowthMachineCanvas({
   // rather than uploaded. Fine for this board's actual usage (drawings and
   // locked heading shapes), not recommended if large media becomes common.
   const store = useSync({ uri: `${syncServerUrl}/api/connect/${roomId}`, assets: inlineBase64AssetStore });
+
+  if (store.status === 'loading') {
+    return <AsphaltDistributorLoader label="Connecting to board" />;
+  }
+  if (store.status === 'error') {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background p-6 text-center">
+        <p className="text-sm text-grey-600">Couldn&apos;t connect to the board. Refresh to try again.</p>
+      </div>
+    );
+  }
+  // status is 'synced-remote' from here, but connectionStatus can still drop
+  // to 'offline' later (dropped/slow network) while the socket quietly
+  // retries underneath — same loader rather than leaving a frozen,
+  // unexplained canvas on screen while that happens.
+  if (store.connectionStatus === 'offline') {
+    return <AsphaltDistributorLoader label="Reconnecting" />;
+  }
+
   return <GrowthMachineCanvas readOnly={readOnly} roomId={roomId} store={store} />;
 }
 

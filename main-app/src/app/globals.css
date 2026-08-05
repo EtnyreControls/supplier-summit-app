@@ -356,3 +356,79 @@ html {
 .animate-summit-chip {
   animation: summit-chip-fade 2s ease-out 3s forwards;
 }
+
+/* AsphaltDistributorLoader — see components/asphalt-distributor-loader.tsx.
+   Parked rather than crossing the screen (a full ChipspreaderMarquee-style
+   drive takes several seconds and most loads here don't last that long),
+   so it needs to read as "working" from frame one instead of needing time
+   to arrive: a small idle bob on the whole truck (engine/spray vibration)
+   plus the drip loop below. */
+@keyframes summit-asphalt-idle-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+.animate-summit-asphalt-idle {
+  animation: summit-asphalt-idle-bob 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-summit-asphalt-idle {
+    animation: none;
+  }
+}
+
+/* Asphalt dripping from the parked distributor's spray bar onto the road
+   below it — continuous droplets rather than chipspreader's world-space
+   trail (that approach needs the truck to be moving to leave a trail
+   behind; parked, each drop just falls in place and fades). Individual
+   spans stagger this via animation-delay (see DRIPS in the component). */
+@keyframes summit-asphalt-drip {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+}
+.animate-summit-asphalt-drip {
+  animation: summit-asphalt-drip 1.3s ease-in infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-summit-asphalt-drip {
+    display: none;
+  }
+}
+
+/* Pulsing "..." dots on the loading label — infinite, unlike
+   .animate-summit-pulse (a one-shot reveal cue used elsewhere). */
+@keyframes summit-loading-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.animate-summit-loading-dot {
+  animation: summit-loading-dot 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-summit-loading-dot {
+    animation: none;
+    opacity: 1;
+  }
+}

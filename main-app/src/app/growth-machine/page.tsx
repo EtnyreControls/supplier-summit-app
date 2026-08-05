@@ -10,6 +10,7 @@ import {
   TopNav,
   NavLogo,
   ChipspreaderMarquee,
+  AsphaltDistributorLoader,
   useToast,
   useProfileModal,
   useBadgeQrModal,
@@ -144,6 +145,7 @@ export default function GrowthMachinePage() {
           <ChipspreaderMarquee />
         </div>
       </PageContainer>
+      {joining && <AsphaltDistributorLoader label="Joining table" />}
       {toast}
       {profileModal}
       {badgeQrModal}

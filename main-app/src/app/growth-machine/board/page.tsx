@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@mui/material/Button";
-import { GrowthMachine, BoardOnboardingTour } from "@/components";
+import { GrowthMachine, BoardOnboardingTour, AsphaltDistributorLoader } from "@/components";
 import { enterGrowthMachine } from "@/lib/supabase/growth-machine";
 
 /**
@@ -65,7 +65,7 @@ function Board() {
 
 export default function GrowthMachineBoardPage() {
   return (
-    <React.Suspense fallback={null}>
+    <React.Suspense fallback={<AsphaltDistributorLoader label="Loading board" />}>
       <Board />
     </React.Suspense>
   );

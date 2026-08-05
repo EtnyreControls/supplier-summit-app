@@ -25,6 +25,7 @@ export { RoadAheadDial } from "./homepage/road-ahead-dial"
 export { BusinessUnits } from "./homepage/business-units"
 export { GrowthMachine, GrowthMachineBoardViewer } from "./text"
 export { ChipspreaderMarquee } from "./chipspreader-marquee"
+export { AsphaltDistributorLoader } from "./asphalt-distributor-loader"
 export { BoardOnboardingTour } from "./board-onboarding-tour"
 export { AgendaTimeline, type AgendaSession } from "./agenda/agenda-timeline";
 export { SessionDetail, type AgendaSpeaker } from "./agenda/session-detail";

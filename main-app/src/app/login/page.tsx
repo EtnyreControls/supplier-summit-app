@@ -3,7 +3,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
-import { NavLogo, ModeToggle, useToast } from "@/components";
+import { NavLogo, ModeToggle, useToast, AsphaltDistributorLoader } from "@/components";
 import { loginWithPin } from "./actions";
 
 /**
@@ -25,8 +25,11 @@ export default function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     const { error } = await loginWithPin(uniqueId, pin);
-    setSubmitting(false);
     if (error) {
+      // Only reset on failure — on success `submitting` stays true so the
+      // full-screen loader covers the gap up to the /welcome redirect
+      // instead of flashing back to the plain form for a moment.
+      setSubmitting(false);
       showToast(error, "error");
     } else {
       router.push("/welcome");
@@ -74,6 +77,7 @@ export default function LoginPage() {
           </div>
         </form>
       </div>
+      {submitting && <AsphaltDistributorLoader label="Signing in" />}
       {toast}
     </div>
   );

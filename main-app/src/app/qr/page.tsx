@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { NavLogo, ModeToggle } from "@/components";
+import { NavLogo, ModeToggle, AsphaltDistributorLoader } from "@/components";
 import { handleQrScan } from "./actions";
 
 /**
@@ -61,6 +61,10 @@ export default function QrLandingPage() {
     // that should re-fire if searchParams identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (status === "checking") {
+    return <AsphaltDistributorLoader label="Checking badge" />;
+  }
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
