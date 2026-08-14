@@ -10,7 +10,7 @@ import { handleQrScan } from "./actions";
  * and lets the server action decide login vs. contact-save vs. no-op based
  * on whether this device already has a session (see actions.ts).
  */
-export default function QrLandingPage() {
+function QrLandingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = React.useState<"checking" | "done" | "error">("checking");
@@ -85,5 +85,13 @@ export default function QrLandingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function QrLandingPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <QrLandingContent />
+    </React.Suspense>
   );
 }
