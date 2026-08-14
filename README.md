@@ -1,6 +1,6 @@
 # Supplier Summit Digital Experience
 
-## Overview 
+## Overview
 
 The Supplier Summit Digital Experience is a mobile-first web application designed to modernize supplier engagement before, during, and after the Supplier Summit. Rather than relying on multiple disconnected tools for registration, polling, Q&A, networking, and feedback collection, this platform brings these features together into a single, intuitive experience.
 
