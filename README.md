@@ -4,7 +4,7 @@
 
 The Supplier Summit Digital Experience is a mobile-first web application designed to modernize supplier engagement before, during, and after the Supplier Summit. Rather than relying on multiple disconnected tools for registration, polling, Q&A, networking, and feedback collection, this platform brings these features together into a single, intuitive experience.
 
-The project also serves as a demonstration of our digital transformation efforts. While artificial intelligence is incorporated into the application, it is only used where it provides clear value to users. Traditional software solutions are preferred whenever they can accomplish the same task with less complexity. The overall goal is to improve the attendee experience while maintaining transparency, security, and trust.
+The project also serves as a demonstration of our digital transformation efforts. While artificial intelligence is incorporated into the application, it is only used where it provides clear value to users. Traditional software solutions are preferred whenever they can accomplish the same task with less complexity. The overall goal is to improve the attendee experience while maintaining transparency, security, and trust. 
 
 ## Project Goals
 
