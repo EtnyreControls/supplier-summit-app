@@ -32,9 +32,8 @@ jobs:
           cd main-app
           mkdir -p deploy
           cp -r .next/standalone/. deploy/
-          mkdir -p deploy/main-app/.next
-          cp -r .next/static deploy/main-app/.next/static
-          cp -r public deploy/main-app/public
+          cp -r .next/static deploy/.next/static
+          cp -r public deploy/public
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -69,4 +68,3 @@ jobs:
           app-name: 'app-etnyre-supplier-prod'
           slot-name: 'Production'
           package: .
-          
