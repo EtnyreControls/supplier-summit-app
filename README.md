@@ -1,4 +1,4 @@
-# Supplier Summit Digital Experience 
+# Supplier Summit Digital Experience
 
 ## Overview
 
