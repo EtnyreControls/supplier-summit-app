@@ -29,6 +29,9 @@ import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded'
 import ArrowForwardIosRoundedIcon from '@mui/icons-material/ArrowForwardIosRounded'
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded'
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined'
+import Collapse from '@mui/material/Collapse'
 import { useRouter } from 'next/navigation'
 import { submitGrowthMachineBoard } from '@/lib/supabase/growth-machine'
 import { getLatestGrowthMachineBoardForTable } from '@/lib/supabase/get-growth-machine-board'
@@ -86,19 +89,85 @@ const components: TLComponents = {
 }
 
 const PROMPT_HEADINGS = [
-  'Engine: What drives growth?\nComplete this sentence: Our Growth Machine will help Etnyre grow by...',
-  'Fuel: What information or support is needed?\nComplete this sentence: Etnyre will provide... Suppliers will provide...',
-  'Gears: How do we work together?\nComplete this sentence: Together, we will...',
-  'Brakes: What slows us down?\nComplete this sentence: Our biggest brake is... We will release the brake by...',
-  'Turbo boost: What one big idea could accelerate growth?\nComplete this sentence: Our Turbo Boost idea is... This would accelerate growth by...',
+  'Engine: What drives growth?',
+  'Fuel: What information or support is needed?',
+  'Gears: How do we work together?',
+  'Brakes: What slows us down?',
+  'Turbo boost: What one big idea could accelerate growth?',
+]
+// Shown in the expandable hint box under the prompt nav bar (see
+// PromptHintBox) — the fuller framing question behind each heading above.
+const PROMPT_HINTS = [
+  'What is the main growth opportunity Etnyre and its suppliers could achieve together?',
+  'What must Etnyre and suppliers provide to power this growth opportunity?',
+  'What practical actions should Etnyre and suppliers complete together?',
+  'What is the biggest barrier that could slow or stop this growth opportunity?',
+  'What is one bold but practical idea that could accelerate growth for Etnyre and its suppliers?',
+]
+// The "complete this sentence" starter drawn directly on the canvas below
+// each page's locked heading (see COMPLETION_BOUNDS) — unprefixed, styled
+// like normal canvas text, so the Builder can literally finish the sentence
+// around it.
+const PROMPT_COMPLETIONS = [
+  'Our Growth Machine will help Etnyre grow by...',
+  'Etnyre will provide... Suppliers will provide...',
+  'Together, we will...',
+  'Our biggest brake is... We will release the brake by...',
+  'Our Turbo Boost idea is... This would accelerate growth by...',
 ]
 const PROMPT_COUNT = PROMPT_HEADINGS.length
+
+/**
+ * Collapsed-by-default hint strip rendered under the prompt nav bar (both
+ * Builder and Spectator). Starts collapsed each time the prompt changes so
+ * it doesn't cover the canvas unless someone asks for it.
+ */
+function PromptHintBox({ index }: { index: number }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  React.useEffect(() => {
+    setExpanded(false);
+  }, [index]);
+
+  return (
+    <div
+      className="pointer-events-auto w-full max-w-md rounded-(--radius-card) shadow-lg"
+      style={{ backgroundColor: '#000' }}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2 px-4 py-1.5 text-left"
+      >
+        <LightbulbOutlinedIcon sx={{ fontSize: 16, color: '#fff' }} />
+        <span className="grow whitespace-nowrap text-xs font-medium text-white">Hint</span>
+        <KeyboardArrowDownRoundedIcon
+          sx={{ fontSize: 16, color: '#fff', transition: 'transform 0.15s', transform: expanded ? 'rotate(180deg)' : 'none' }}
+        />
+      </button>
+      <Collapse in={expanded}>
+        <p className="px-4 pb-2.5 text-xs text-white">{PROMPT_HINTS[index]}</p>
+      </Collapse>
+    </div>
+  );
+}
+
 // Position/size of each page's locked heading shape — centered on the
 // origin so it's a stable, known target for zoomToBounds regardless of
-// where the shape actually sits in a given page's coordinate space. Taller
-// than a single line of text (h: 110) to fit the "Complete this sentence"
-// hint below the heading.
-const HEADING_BOUNDS = { x: -350, y: -260, w: 700, h: 160 }
+// where the shape actually sits in a given page's coordinate space.
+const HEADING_BOUNDS = { x: -350, y: -260, w: 700, h: 110 }
+// The locked "complete this sentence" text sits directly below the heading,
+// same horizontal span.
+const COMPLETION_BOUNDS = { x: -350, y: -140, w: 700, h: 70 }
+// Union of the two above — what the camera actually frames, so both the
+// heading and the completion starter are in view together.
+const FRAME_BOUNDS = {
+  x: HEADING_BOUNDS.x,
+  y: HEADING_BOUNDS.y,
+  w: HEADING_BOUNDS.w,
+  h: COMPLETION_BOUNDS.y + COMPLETION_BOUNDS.h - HEADING_BOUNDS.y,
+}
 
 /**
  * Builder-only flow: 5 tldraw pages, one per prompt (see PROMPT_HEADINGS). A
@@ -166,26 +235,95 @@ function BuilderFlow({
     }
     const ids = editor.getPages().slice(0, PROMPT_COUNT).map((p) => p.id);
 
-    editor.createShapes(
-      ids.map((pageId, i) => ({
-        type: 'geo' as const,
-        parentId: pageId,
-        x: HEADING_BOUNDS.x,
-        y: HEADING_BOUNDS.y,
-        isLocked: true,
-        props: {
-          geo: 'rectangle' as const,
-          w: HEADING_BOUNDS.w,
-          h: HEADING_BOUNDS.h,
-          dash: 'solid' as const,
-          fill: 'none' as const,
-          color: 'black' as const,
-          size: 'l' as const,
-          align: 'middle' as const,
-          verticalAlign: 'middle' as const,
-          richText: toRichText(PROMPT_HEADINGS[i]),
-        },
-      }))
+    // Reconcile rather than blindly append — a room from a previous session
+    // (or an older revision of PROMPT_HEADINGS/HEADING_BOUNDS) may already
+    // have a locked heading shape on each page. Update it in place, drop any
+    // extra stragglers, and only create one from scratch if the page truly
+    // has none, so content edits actually reach already-running rooms.
+    // editor.updateShapes/deleteShapes silently no-op on locked shapes
+    // unless the caller explicitly unlocks them or runs inside this
+    // ignoreShapeLock block — without it, every reconcile below (needed
+    // because these heading/completion shapes are locked) would be dropped.
+    // Each page gets 3 locked shapes, told apart via meta.gmRole (a geo
+    // "frame" and two text shapes would otherwise be ambiguous to a
+    // type-only filter): a thin-stroke frame around the heading area, the
+    // heading question as its own centered text overlay (kept separate from
+    // the frame so the border's stroke weight — geo's `size` prop — doesn't
+    // also have to dictate the label's font size), and the "complete this
+    // sentence" starter below it.
+    const reconcile = (
+      pageId: TLPageId,
+      role: string,
+      type: 'geo' | 'text',
+      x: number,
+      y: number,
+      props: Record<string, unknown>
+    ) => {
+      const existing = [...editor.getPageShapeIds(pageId)].filter((sid) => {
+        const shape = editor.getShape(sid);
+        return shape?.type === type && shape.isLocked && shape.meta?.gmRole === role;
+      });
+      if (existing.length > 0) {
+        editor.updateShape({ id: existing[0], type, x, y, isLocked: true, props });
+        if (existing.length > 1) editor.deleteShapes(existing.slice(1));
+      } else {
+        editor.createShapes([
+          { type, parentId: pageId, x, y, isLocked: true, meta: { gmRole: role }, props },
+        ]);
+      }
+    };
+
+    editor.run(
+      () => {
+        ids.forEach((pageId, i) => {
+          reconcile(pageId, 'heading-frame', 'geo', HEADING_BOUNDS.x, HEADING_BOUNDS.y, {
+            geo: 'rectangle',
+            w: HEADING_BOUNDS.w,
+            h: HEADING_BOUNDS.h,
+            dash: 'solid',
+            fill: 'none',
+            color: 'black',
+            // Thin border — kept independent of the label/question font
+            // size below, which a geo shape's own `size` prop would
+            // otherwise also control.
+            size: 's',
+            font: 'serif',
+            align: 'middle',
+            verticalAlign: 'middle',
+            richText: toRichText(''),
+          });
+
+          // Text shapes have no verticalAlign of their own (unlike geo), so
+          // nudge down from the frame's top edge to roughly center a
+          // single line of 'l' text within the frame's height.
+          reconcile(pageId, 'question', 'text', HEADING_BOUNDS.x, HEADING_BOUNDS.y + 35, {
+            color: 'black',
+            size: 'm',
+            font: 'serif',
+            textAlign: 'middle',
+            w: HEADING_BOUNDS.w,
+            scale: 1,
+            autoSize: false,
+            richText: toRichText(PROMPT_HEADINGS[i]),
+          });
+
+          reconcile(pageId, 'completion', 'text', COMPLETION_BOUNDS.x, COMPLETION_BOUNDS.y, {
+            color: 'black',
+            // 'l' on a standalone text shape renders noticeably bigger than
+            // 'l' on a geo shape's label (tldraw's FONT_SIZES vs
+            // LABEL_FONT_SIZES) — 'm' is the closest visual match to the
+            // heading above.
+            size: 'm',
+            font: 'serif',
+            textAlign: 'middle',
+            w: COMPLETION_BOUNDS.w,
+            scale: 1,
+            autoSize: false,
+            richText: toRichText(PROMPT_COMPLETIONS[i]),
+          });
+        });
+      },
+      { ignoreShapeLock: true }
     );
 
     setPageIds(ids);
@@ -195,7 +333,7 @@ function BuilderFlow({
     // so the heading — placed at negative coordinates to sit centered
     // around the origin — was landing outside the visible area. Snap
     // (no animation) to frame it on every page, not just the first.
-    editor.zoomToBounds(HEADING_BOUNDS, { inset: 200, targetZoom: 1 });
+    editor.zoomToBounds(FRAME_BOUNDS, { inset: 200, targetZoom: 1 });
 
     // A Builder revisiting an already-submitted table (e.g. via the "Edit
     // board" action on /growth-machine once role-picking is skipped for a
@@ -222,7 +360,7 @@ function BuilderFlow({
     setIndex(i);
     // Each page has its own independent camera — without this, only the
     // first page (framed during setup) would reliably show its heading.
-    editor.zoomToBounds(HEADING_BOUNDS, { inset: 200, targetZoom: 1 });
+    editor.zoomToBounds(FRAME_BOUNDS, { inset: 200, targetZoom: 1 });
   };
 
   const enterReview = async () => {
@@ -342,7 +480,7 @@ function BuilderFlow({
   const isLast = index === PROMPT_COUNT - 1;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-[400] flex justify-center" style={{ top: 64 }}>
+    <div className="pointer-events-none fixed inset-x-0 z-[400] flex flex-col items-center gap-2" style={{ top: 64 }}>
       <div
         data-tour="prompt-banner"
         className="pointer-events-auto flex items-center gap-3 rounded-(--radius-card) px-4 py-2 shadow-lg"
@@ -384,6 +522,7 @@ function BuilderFlow({
           )
         )}
       </div>
+      <PromptHintBox index={index} />
     </div>
   );
 }
@@ -423,7 +562,7 @@ function SpectatorPromptNav({ editor }: { editor: Editor }) {
       setIndex(i);
       // Same framing BuilderFlow uses — each page has its own independent
       // camera, so this needs to run on every page switch, not just once.
-      editor.zoomToBounds(HEADING_BOUNDS, { inset: 200, targetZoom: 1 });
+      editor.zoomToBounds(FRAME_BOUNDS, { inset: 200, targetZoom: 1 });
     },
     [editor]
   );
@@ -438,7 +577,7 @@ function SpectatorPromptNav({ editor }: { editor: Editor }) {
   const isLast = index === PROMPT_COUNT - 1;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-[400] flex justify-center" style={{ top: 64 }}>
+    <div className="pointer-events-none fixed inset-x-0 z-[400] flex flex-col items-center gap-2" style={{ top: 64 }}>
       <div
         className="pointer-events-auto flex items-center gap-3 rounded-(--radius-card) px-4 py-2 shadow-lg"
         style={{ backgroundColor: '#000' }}
@@ -465,6 +604,7 @@ function SpectatorPromptNav({ editor }: { editor: Editor }) {
           <ArrowForwardIosRoundedIcon sx={{ fontSize: 14 }} />
         </IconButton>
       </div>
+      <PromptHintBox index={index} />
     </div>
   );
 }
@@ -931,7 +1071,7 @@ export function GrowthMachineBoardViewer({
     editor.setCurrentPage(pageIds[i]);
     // Same framing BuilderFlow/SpectatorPromptNav use — each page has its
     // own independent camera.
-    editor.zoomToBounds(HEADING_BOUNDS, { inset: 200, targetZoom: 1 });
+    editor.zoomToBounds(FRAME_BOUNDS, { inset: 200, targetZoom: 1 });
     setSelectedIndex(i);
   };
 
