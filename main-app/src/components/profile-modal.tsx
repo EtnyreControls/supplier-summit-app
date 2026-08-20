@@ -8,6 +8,7 @@ import Avatar from "@mui/material/Avatar";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import { ContactShareList, type ShareField } from "./qr";
 import { createClient } from "@/lib/supabase/client";
 
@@ -15,6 +16,7 @@ type Profile = {
   name: string;
   initials: string;
   company: string | null;
+  isAdmin: boolean;
 };
 
 function initialsOf(name: string) {
@@ -62,7 +64,7 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
 
       const { data, error } = await supabase
         .from("user")
-        .select("first_name, last_name, company, email, phone, share_email, share_phone, share_company")
+        .select("first_name, last_name, company, email, phone, share_email, share_phone, share_company, role")
         .eq("user_id", authUser.id)
         .single();
 
@@ -73,7 +75,7 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
 
       const name = [data.first_name, data.last_name].filter(Boolean).join(" ") || "Attendee";
       setUserId(authUser.id);
-      setProfile({ name, initials: initialsOf(name), company: data.company });
+      setProfile({ name, initials: initialsOf(name), company: data.company, isAdmin: data.role === "admin" });
       setFields([
         { id: "email", label: "Email", value: data.email ?? "Not set", shared: data.share_email },
         { id: "phone", label: "Phone", value: data.phone ?? "Not set", shared: data.share_phone },
@@ -121,6 +123,21 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
               </div>
             </div>
             <ContactShareList fields={fields} onToggle={handleToggle} />
+            {profile.isAdmin && (
+              // Deliberately the one link from the attendee app into
+              // /admin — gated by role and shown only to the signed-in
+              // admin themselves in their own profile, not general nav, so
+              // it doesn't compromise the admin area's isolation.
+              <Button
+                href="/admin"
+                variant="outlined"
+                color="secondary"
+                startIcon={<AdminPanelSettingsRoundedIcon />}
+                fullWidth
+              >
+                Admin portal
+              </Button>
+            )}
           </div>
         )}
       </DialogContent>

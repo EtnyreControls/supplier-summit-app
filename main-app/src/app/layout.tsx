@@ -3,7 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
 import ThemeRegistry from "@/theme/ThemeRegistry";
-import { GlobalQuestionFab } from "@/components";
+import { GlobalQuestionFab, GeneralCountdownBanner } from "@/components";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}>
         <InitColorSchemeScript attribute="class" defaultMode="system" />
         <ThemeRegistry>
+          <GeneralCountdownBanner />
           {children}
           <GlobalQuestionFab />
         </ThemeRegistry>
