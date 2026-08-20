@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Button from "@mui/material/Button";
 import ConstructionRoundedIcon from "@mui/icons-material/ConstructionRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import {
   PageContainer,
   SectionHeader,
@@ -12,6 +13,7 @@ import {
   ChipspreaderMarquee,
   AsphaltDistributorLoader,
   GrowthMachineBoardViewer,
+  EmptyState,
   useToast,
   useProfileModal,
   useBadgeQrModal,
@@ -19,6 +21,49 @@ import {
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 import { enterGrowthMachine, getGrowthMachineStatus } from "@/lib/supabase/growth-machine";
 import { getLatestGrowthMachineBoardForTable } from "@/lib/supabase/get-growth-machine-board";
+import { createClient } from "@/lib/supabase/client";
+
+/**
+ * Gates the whole page on live_state.growth_machine_session_live (toggled
+ * from /admin/live) — attendees see a locked screen until the admin turns
+ * the session on, and it unlocks live for everyone already on the page via
+ * the same Supabase Realtime subscription the agenda/banner use.
+ */
+function useGrowthMachineSessionLock() {
+  const [checkingLock, setCheckingLock] = React.useState(true);
+  const [sessionLive, setSessionLive] = React.useState(false);
+
+  React.useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("live_state")
+      .select("growth_machine_session_live")
+      .eq("id", true)
+      .single()
+      .then(({ data }) => {
+        setSessionLive(Boolean(data?.growth_machine_session_live));
+        setCheckingLock(false);
+      });
+
+    const channel = supabase
+      .channel("growth-machine-session-lock")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "live_state" },
+        (payload) => {
+          const updated = payload.new as { growth_machine_session_live: boolean };
+          setSessionLive(updated.growth_machine_session_live);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  return { checkingLock, sessionLive };
+}
 
 /**
  * Route: /growth-machine ("Growth Machine" in TopNav)
@@ -123,6 +168,7 @@ export default function GrowthMachinePage() {
   const [selectedRole, setSelectedRole] = React.useState<Role | null>(null);
   const [joining, setJoining] = React.useState(false);
   const { checkingStatus, submission } = useGrowthMachineStatus();
+  const { checkingLock, sessionLive } = useGrowthMachineSessionLock();
 
   const chooseRole = async (role: Role) => {
     if (joining) return;
@@ -153,7 +199,7 @@ export default function GrowthMachinePage() {
     setTimeout(() => router.push(`/growth-machine/board?role=${finalRole}${table}`), 180);
   };
 
-  if (checkingStatus) {
+  if (checkingStatus || checkingLock) {
     return (
       <div className="flex min-h-dvh flex-col bg-background">
         <TopNav
@@ -195,6 +241,30 @@ export default function GrowthMachinePage() {
             </PageContainer>
           </>
         )}
+        {profileModal}
+        {badgeQrModal}
+      </div>
+    );
+  }
+
+  if (!sessionLive) {
+    return (
+      <div className="flex min-h-dvh flex-col bg-background">
+        <TopNav
+          activeKey="growth-machine"
+          logo={<NavLogo />}
+          initials="SC"
+          onQrClick={openBadgeQr}
+          onProfile={openProfile}
+          onLogout={handleLogout}
+        />
+        <PageContainer className="flex grow flex-col items-center justify-center">
+          <EmptyState
+            icon={<LockRoundedIcon fontSize="large" />}
+            title="Growth Machine hasn't started yet"
+            body="This session unlocks the moment it goes live — check back shortly."
+          />
+        </PageContainer>
         {profileModal}
         {badgeQrModal}
       </div>

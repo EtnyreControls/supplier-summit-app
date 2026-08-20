@@ -24,6 +24,7 @@ import {
   type AgendaSpeaker,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * The sidebar rail only shows a 4-session window — one before, the live
@@ -56,7 +57,7 @@ function windowedSessions(sessions: AgendaSession[]): AgendaSession[] {
  * server-side (see page.tsx) and owns the interactive timeline selection.
  */
 export function AgendaPageClient({
-  sessions,
+  sessions: sessionsProp,
   speakers,
 }: {
   sessions: AgendaSession[];
@@ -66,6 +67,29 @@ export function AgendaPageClient({
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
+  // Reflects admin-triggered "go live"/"end" changes (see /admin/live)
+  // without a reload — event.status is added to the supabase_realtime
+  // publication in the admin panel migration.
+  const [sessions, setSessions] = React.useState(sessionsProp);
+  React.useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("agenda-live-status")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "event" },
+        (payload) => {
+          const updated = payload.new as { event_id: string; status: string };
+          setSessions((prev) =>
+            prev.map((s) => (s.id === updated.event_id ? { ...s, live: updated.status === "live" } : s)),
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
   const defaultSession = sessions.find((s) => s.live) ?? sessions[0];
   const [selectedId, setSelectedId] = React.useState(defaultSession?.id ?? "");
   const selected = sessions.find((s) => s.id === selectedId) ?? defaultSession;

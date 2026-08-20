@@ -86,17 +86,19 @@ const components: TLComponents = {
 }
 
 const PROMPT_HEADINGS = [
-  'Engine: What drives growth?',
-  'Fuel: What information or support is needed?',
-  'Gears: How do we work together?',
-  'Brakes: What slows us down?',
-  'Turbo boost: What one big idea could accelerate growth?',
+  'Engine: What drives growth?\nComplete this sentence: Our Growth Machine will help Etnyre grow by...',
+  'Fuel: What information or support is needed?\nComplete this sentence: Etnyre will provide... Suppliers will provide...',
+  'Gears: How do we work together?\nComplete this sentence: Together, we will...',
+  'Brakes: What slows us down?\nComplete this sentence: Our biggest brake is... We will release the brake by...',
+  'Turbo boost: What one big idea could accelerate growth?\nComplete this sentence: Our Turbo Boost idea is... This would accelerate growth by...',
 ]
 const PROMPT_COUNT = PROMPT_HEADINGS.length
 // Position/size of each page's locked heading shape — centered on the
 // origin so it's a stable, known target for zoomToBounds regardless of
-// where the shape actually sits in a given page's coordinate space.
-const HEADING_BOUNDS = { x: -350, y: -260, w: 700, h: 110 }
+// where the shape actually sits in a given page's coordinate space. Taller
+// than a single line of text (h: 110) to fit the "Complete this sentence"
+// hint below the heading.
+const HEADING_BOUNDS = { x: -350, y: -260, w: 700, h: 160 }
 
 /**
  * Builder-only flow: 5 tldraw pages, one per prompt (see PROMPT_HEADINGS). A
