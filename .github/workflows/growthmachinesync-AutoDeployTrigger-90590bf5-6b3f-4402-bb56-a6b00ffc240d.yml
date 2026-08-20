@@ -4,10 +4,10 @@ name: Trigger auto deployment for growthmachinesync
 on:
   # Automatically trigger it when detected changes in repo
   push:
-    branches: 
+    branches:
       [ main ]
     paths:
-    - '**'
+    - 'sync-server-azure/**'
     - '.github/workflows/growthmachinesync-AutoDeployTrigger-90590bf5-6b3f-4402-bb56-a6b00ffc240d.yml'
 
   # Allow manual trigger 
@@ -34,16 +34,20 @@ jobs:
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:
-          appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
-          registryUrl: 
-          registryUsername: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_PASSWORD }}
+          # Points the build at the sync-server-azure subfolder specifically
+          # (this is a monorepo — the repo root has no Dockerfile, which is
+          # why this fell back to Oryx buildpacks and failed instead of
+          # using the real Dockerfile).
+          appSourcePath: ${{ github.workspace }}/sync-server-azure
+          dockerfilePath: Dockerfile
+          # ACR-based push, authenticated via the azure/login step above
+          # (that identity needs AcrPush on this registry) rather than
+          # separate registry username/password secrets, which were never
+          # actually created (registryUrl was left blank).
+          acrName: growthmachine
+          imageToBuild: growthmachine.azurecr.io/growthmachinesync:${{ github.sha }}
           containerAppName: growthmachinesync
           resourceGroup: app-etnyre-supplier-prod_group
-          imageToBuild: default/[parameters('containerAppName')]:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
+          targetPort: 8080
 
 
