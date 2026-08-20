@@ -43,6 +43,15 @@ import { AsphaltDistributorLoader } from './asphalt-distributor-loader'
 const SYNC_SERVER_URL = process.env.NEXT_PUBLIC_TLDRAW_SYNC_URL;
 
 /**
+ * Without this, tldraw refuses to render in production (shows a blank
+ * canvas and logs "No tldraw license key provided!") — see
+ * https://tldraw.dev/deploy/licensing. Set as a build-time env var
+ * (NEXT_PUBLIC_*, so it must also be forwarded into the GitHub Actions
+ * build step's env, not just added as a repo variable).
+ */
+const TLDRAW_LICENSE_KEY = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
+
+/**
  * tldraw's own panels default to top-right (style panel) and bottom-center
  * (toolbar) via its internal CSS grid — that grid isn't meant to be fought
  * with overrides, so these reposition the DEFAULT panel content inside a
@@ -823,6 +832,7 @@ function GrowthMachineCanvas({
       <Tldraw
         store={store}
         user={user}
+        licenseKey={TLDRAW_LICENSE_KEY}
         hideUi={readOnly}
         components={components}
         onMount={(ed: Editor) => {
@@ -942,6 +952,7 @@ export function GrowthMachineBoardViewer({
         <Tldraw
           store={store}
           hideUi
+          licenseKey={TLDRAW_LICENSE_KEY}
           onMount={(ed: Editor) => {
             ed.updateInstanceState({ isReadonly: true });
             setEditor(ed);

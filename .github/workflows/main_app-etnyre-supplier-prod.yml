@@ -25,6 +25,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_TLDRAW_SYNC_URL: ${{ vars.NEXT_PUBLIC_TLDRAW_SYNC_URL }}
+          NEXT_PUBLIC_TLDRAW_LICENSE_KEY: ${{ vars.NEXT_PUBLIC_TLDRAW_LICENSE_KEY }}
         run: |
           cd main-app
           npm install
