@@ -11,12 +11,14 @@ import {
   NavLogo,
   ChipspreaderMarquee,
   AsphaltDistributorLoader,
+  GrowthMachineBoardViewer,
   useToast,
   useProfileModal,
   useBadgeQrModal,
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
-import { enterGrowthMachine } from "@/lib/supabase/growth-machine";
+import { enterGrowthMachine, getGrowthMachineStatus } from "@/lib/supabase/growth-machine";
+import { getLatestGrowthMachineBoardForTable } from "@/lib/supabase/get-growth-machine-board";
 
 /**
  * Route: /growth-machine ("Growth Machine" in TopNav)
@@ -67,6 +69,51 @@ function RoleCard({
   );
 }
 
+/**
+ * Once a table has submitted its board, there's nothing left to pick a
+ * role for — everyone at that table just sees the finished board
+ * (GrowthMachineBoardViewer, same grid-then-static-page view analytics
+ * uses), and the table's Builder additionally gets an "Edit board" action
+ * to go back into the live canvas. `checkingStatus` covers the brief
+ * get_growth_machine_status() round-trip before either that or the normal
+ * role picker below can render.
+ */
+function useGrowthMachineStatus() {
+  const [checkingStatus, setCheckingStatus] = React.useState(true);
+  const [submission, setSubmission] = React.useState<{
+    tableId: string;
+    isBuilder: boolean;
+    snapshot: unknown | null;
+    error: string | null;
+  } | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    getGrowthMachineStatus()
+      .then(async (status) => {
+        if (cancelled) return;
+        if (status.error || !status.hasSubmission || !status.tableId) {
+          setCheckingStatus(false);
+          return;
+        }
+        const { snapshot, error } = await getLatestGrowthMachineBoardForTable(status.tableId);
+        if (cancelled) return;
+        setSubmission({ tableId: status.tableId, isBuilder: status.isBuilder, snapshot, error });
+        setCheckingStatus(false);
+      })
+      .catch(() => {
+        // RPC unavailable, signed-out local dev, etc. — fall back to the
+        // normal role picker rather than blocking the page.
+        if (!cancelled) setCheckingStatus(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { checkingStatus, submission };
+}
+
 export default function GrowthMachinePage() {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
@@ -75,6 +122,7 @@ export default function GrowthMachinePage() {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = React.useState<Role | null>(null);
   const [joining, setJoining] = React.useState(false);
+  const { checkingStatus, submission } = useGrowthMachineStatus();
 
   const chooseRole = async (role: Role) => {
     if (joining) return;
@@ -104,6 +152,54 @@ export default function GrowthMachinePage() {
     // board route takes over.
     setTimeout(() => router.push(`/growth-machine/board?role=${finalRole}${table}`), 180);
   };
+
+  if (checkingStatus) {
+    return (
+      <div className="flex min-h-dvh flex-col bg-background">
+        <TopNav
+          activeKey="growth-machine"
+          logo={<NavLogo />}
+          initials="SC"
+          onQrClick={openBadgeQr}
+          onProfile={openProfile}
+          onLogout={handleLogout}
+        />
+        <AsphaltDistributorLoader label="Loading" />
+        {profileModal}
+        {badgeQrModal}
+      </div>
+    );
+  }
+
+  if (submission) {
+    return (
+      <div className="flex min-h-dvh flex-col bg-background">
+        {submission.snapshot ? (
+          <GrowthMachineBoardViewer
+            snapshot={submission.snapshot}
+            onClose={() => router.push("/welcome")}
+            editHref={submission.isBuilder ? `/growth-machine/board?role=builder&table=${submission.tableId}` : undefined}
+          />
+        ) : (
+          <>
+            <TopNav
+              activeKey="growth-machine"
+              logo={<NavLogo />}
+              initials="SC"
+              onQrClick={openBadgeQr}
+              onProfile={openProfile}
+              onLogout={handleLogout}
+            />
+            <PageContainer className="flex grow flex-col items-center justify-center text-center">
+              <p className="text-sm text-grey-600">{submission.error ?? "Couldn't load the submitted board."}</p>
+            </PageContainer>
+          </>
+        )}
+        {profileModal}
+        {badgeQrModal}
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">

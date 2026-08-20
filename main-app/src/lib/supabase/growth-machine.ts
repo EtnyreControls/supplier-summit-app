@@ -32,6 +32,33 @@ export async function enterGrowthMachine(asBuilder: boolean): Promise<{
 }
 
 /**
+ * Read-only check for /growth-machine's initial render — resolves the
+ * caller's table and whether it already has a submission, without
+ * enter_growth_machine's side effect of claiming/releasing the builder
+ * seat just from loading the page. See get_growth_machine_status() in the
+ * growth_machine_status_check migration.
+ *
+ * A table with a submission skips the role picker entirely: everyone sees
+ * the finished board (GrowthMachineBoardViewer), and only the current
+ * builder additionally gets an Edit action — see GrowthMachinePage.
+ */
+export async function getGrowthMachineStatus(): Promise<{
+  tableId: string | null;
+  isBuilder: boolean;
+  hasSubmission: boolean;
+  error: string | null;
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_growth_machine_status");
+
+  if (error) {
+    return { tableId: null, isBuilder: false, hasSubmission: false, error: "Couldn't load your table." };
+  }
+  const row = data as { table_id: string | null; is_builder: boolean; has_submission: boolean };
+  return { tableId: row.table_id, isBuilder: row.is_builder, hasSubmission: row.has_submission, error: null };
+}
+
+/**
  * Persists a finished board (the tldraw document snapshot) for the
  * caller's table. The database rejects anyone who isn't that table's
  * current builder — see submit_growth_machine_board().
