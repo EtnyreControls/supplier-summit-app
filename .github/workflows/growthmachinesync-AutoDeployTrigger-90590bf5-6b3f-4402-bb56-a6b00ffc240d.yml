@@ -40,11 +40,15 @@ jobs:
           # using the real Dockerfile).
           appSourcePath: ${{ github.workspace }}/sync-server-azure
           dockerfilePath: Dockerfile
-          # ACR-based push, authenticated via the azure/login step above
-          # (that identity needs AcrPush on this registry) rather than
-          # separate registry username/password secrets, which were never
-          # actually created (registryUrl was left blank).
-          acrName: growthmachine
+          # Switched from acrName (Azure AD token exchange via the
+          # azure/login identity) to plain registry admin credentials —
+          # the token-based `az acr login --expose-token` flow kept
+          # failing generically even with AcrPush correctly granted to the
+          # right identity (confirmed via its Azure role assignments), so
+          # this sidesteps whatever was blocking that specific path.
+          registryUrl: growthmachine.azurecr.io
+          registryUsername: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_PASSWORD }}
           imageToBuild: growthmachine.azurecr.io/growthmachinesync:${{ github.sha }}
           containerAppName: growthmachinesync
           resourceGroup: app-etnyre-supplier-prod_group
