@@ -46,10 +46,10 @@ jobs:
           # failing generically even with AcrPush correctly granted to the
           # right identity (confirmed via its Azure role assignments), so
           # this sidesteps whatever was blocking that specific path.
-          registryUrl: growthmachine.azurecr.io
+          registryUrl: growthmachine-are9ehaxdce5cnaa.azurecr.io
           registryUsername: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_PASSWORD }}
-          imageToBuild: growthmachine.azurecr.io/growthmachinesync:${{ github.sha }}
+          imageToBuild: growthmachine-are9ehaxdce5cnaa.azurecr.io/growthmachinesync:${{ github.sha }}
           containerAppName: growthmachinesync
           resourceGroup: app-etnyre-supplier-prod_group
           targetPort: 8080
