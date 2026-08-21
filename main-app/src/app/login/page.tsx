@@ -3,6 +3,10 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import { NavLogo, ModeToggle, useToast, AsphaltDistributorLoader } from "@/components";
 import { loginWithPin } from "./actions";
 
@@ -20,6 +24,7 @@ export default function LoginPage() {
   const [uniqueId, setUniqueId] = React.useState("");
   const [pin, setPin] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const [showPin, setShowPin] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,13 +68,27 @@ export default function LoginPage() {
             />
             <TextField
               label="PIN"
-              type="password"
-              inputMode="numeric"
-              placeholder="4-digit PIN"
+              type={showPin ? "text" : "password"}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              autoComplete="off"
+              autoComplete="current-password"
               required
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                        onClick={() => setShowPin((v) => !v)}
+                        edge="end"
+                        size="small"
+                      >
+                        {showPin ? <VisibilityOffRoundedIcon fontSize="small" /> : <VisibilityRoundedIcon fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <Button type="submit" variant="contained" color="primary" fullWidth disabled={submitting}>
               {submitting ? "Checking…" : "Log in"}
