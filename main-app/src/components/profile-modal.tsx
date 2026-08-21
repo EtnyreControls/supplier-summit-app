@@ -17,7 +17,10 @@ type Profile = {
   initials: string;
   company: string | null;
   isAdmin: boolean;
+  tableNumber: string | null;
 };
+
+type MembershipRow = { event_tables: { table_name: string | null } | null };
 
 function initialsOf(name: string) {
   return name
@@ -62,11 +65,19 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
         return;
       }
 
-      const { data, error } = await supabase
-        .from("user")
-        .select("first_name, last_name, company, email, phone, share_email, share_phone, share_company, role")
-        .eq("user_id", authUser.id)
-        .single();
+      const [{ data, error }, { data: membership }] = await Promise.all([
+        supabase
+          .from("user")
+          .select("first_name, last_name, company, email, phone, share_email, share_phone, share_company, role")
+          .eq("user_id", authUser.id)
+          .single(),
+        supabase
+          .from("event_table_members")
+          .select("event_tables(table_name)")
+          .eq("user_id", authUser.id)
+          .limit(1)
+          .maybeSingle<MembershipRow>(),
+      ]);
 
       if (error || !data) {
         setStatus("error");
@@ -75,7 +86,13 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
 
       const name = [data.first_name, data.last_name].filter(Boolean).join(" ") || "Attendee";
       setUserId(authUser.id);
-      setProfile({ name, initials: initialsOf(name), company: data.company, isAdmin: data.role === "admin" });
+      setProfile({
+        name,
+        initials: initialsOf(name),
+        company: data.company,
+        isAdmin: data.role === "admin",
+        tableNumber: membership?.event_tables?.table_name ?? null,
+      });
       setFields([
         { id: "email", label: "Email", value: data.email ?? "Not set", shared: data.share_email },
         { id: "phone", label: "Phone", value: data.phone ?? "Not set", shared: data.share_phone },
@@ -120,6 +137,9 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
               <div className="min-w-0">
                 <p className="truncate text-[16px] font-bold text-ink">{profile.name}</p>
                 {profile.company && <p className="truncate text-[13px] text-grey-600">{profile.company}</p>}
+                {profile.tableNumber && (
+                  <p className="truncate text-[13px] text-grey-600">Table {profile.tableNumber}</p>
+                )}
               </div>
             </div>
             <ContactShareList fields={fields} onToggle={handleToggle} />
