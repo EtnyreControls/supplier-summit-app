@@ -17,7 +17,7 @@ import {
 } from "@/lib/supabase/admin/admin-events";
 
 const EVENT_FIELDS: EntityField[] = [
-  { name: "topic", label: "Topic", required: true },
+  { name: "event_name", label: "Session name", required: true },
   { name: "description", label: "Description", type: "textarea" },
   { name: "duration", label: "Duration (e.g. 45 min)", required: true },
   { name: "start_time", label: "Start time", type: "datetime" },
@@ -69,7 +69,7 @@ export function EventsAdminClient({
         rows={events}
         setRows={setEvents}
         columns={[
-          { key: "topic", label: "Topic" },
+          { key: "event_name", label: "Session name" },
           { key: "status", label: "Status" },
           { key: "start_time", label: "Start" },
         ]}

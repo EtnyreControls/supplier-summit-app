@@ -7,7 +7,7 @@ const PATH = "/admin/events";
 
 export type AdminEvent = {
   event_id: string;
-  topic: string;
+  event_name: string;
   description: string | null;
   duration: string;
   status: string;

@@ -12,7 +12,6 @@ import type { AgendaSession, AgendaSpeaker } from "@/components";
 type EventRow = {
   event_id: string;
   event_name: string;
-  topic: string | null;
   description: string | null;
   status: string;
   start_time: string | null;
@@ -58,7 +57,7 @@ export default async function AgendaPage() {
   const [{ data: events }, { data: speakerRows }, { data: speakerInfoData }] = await Promise.all([
     supabase
       .from("event")
-      .select("event_id, event_name, topic, description, status, start_time, end_time")
+      .select("event_id, event_name, description, status, start_time, end_time")
       .order("start_time", { ascending: true })
       .returns<EventRow[]>(),
     supabase.from("speakers").select("speaker_id, event_id, bio, user_id").returns<SpeakerRow[]>(),
@@ -98,12 +97,11 @@ export default async function AgendaPage() {
 
   const sessions: AgendaSession[] = (events ?? []).map((e) => ({
     id: e.event_id,
-    // event_name is typed timestamptz in the schema (a pre-existing naming
-    // quirk, see init_schema.sql's header comment) — topic is the actual
-    // session-title text. There's no real venue/room data in this dataset,
-    // so location is left blank rather than showing topic under the wrong
-    // label.
-    title: e.topic ?? "",
+    // event_name now holds the session title (schema has drifted from the
+    // original timestamptz definition in init_schema.sql). topic is reserved
+    // for the NLP question-routing system, not display. There's no real
+    // venue/room data in this dataset, so location is left blank.
+    title: e.event_name ?? "",
     time: formatTimeRange(e.start_time, e.end_time),
     location: "",
     description: e.description ?? "",

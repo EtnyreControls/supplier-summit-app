@@ -5,8 +5,8 @@ export default async function LiveControlPage() {
   const supabase = await createClient();
 
   const [{ data: events }, { data: feedback }, { data: liveState }] = await Promise.all([
-    supabase.from("event").select("event_id, topic, status").order("start_time"),
-    supabase.from("feedback").select("poll_id, poll_name, status"),
+    supabase.from("event").select("event_id, event_name, status").order("start_time"),
+    supabase.from("feedback").select("feedback_id, feedback_name, status"),
     supabase.from("live_state").select("*").eq("id", true).single(),
   ]);
 

@@ -223,7 +223,7 @@ export default function GrowthMachinePage() {
         {submission.snapshot ? (
           <GrowthMachineBoardViewer
             snapshot={submission.snapshot}
-            onClose={() => router.push("/welcome")}
+            onClose={() => router.push("/")}
             editHref={submission.isBuilder ? `/growth-machine/board?role=builder&table=${submission.tableId}` : undefined}
           />
         ) : (

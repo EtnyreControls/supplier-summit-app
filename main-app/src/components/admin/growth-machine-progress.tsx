@@ -18,6 +18,8 @@ export interface GrowthMachineTableProgress {
   memberCount: number;
   submissionCount: number;
   lastSubmittedAt: string | null;
+  promptsCompleted: number;
+  promptsTotal: number;
 }
 
 export interface GrowthMachineBoardSummary {
@@ -63,10 +65,11 @@ function statusChip(status: GrowthMachineTableStatus) {
 /**
  * Cheap, DB-only progress signal per table: whether a board has been
  * submitted (growth_machine_boards row exists), a builder currently holds
- * the seat (event_table_members.is_builder), or neither yet. Doesn't reflect
- * in-progress drawing content — that only lives in the tldraw sync-server's
- * live room, not Postgres — just enough to tell analytics which tables to
- * go check on.
+ * the seat (event_table_members.is_builder), or neither yet, plus how many
+ * of the 5 prompts (growth_machine_entries rows) the Builder has recorded
+ * so far — live per-prompt progress, not just the final submitted/not state.
+ * Still can't see in-progress drawing content itself — that only lives in
+ * the tldraw sync-server's live room, not Postgres.
  */
 export function GrowthMachineProgress({ tables }: { tables: GrowthMachineTableProgress[] }) {
   if (tables.length === 0) {
@@ -91,6 +94,7 @@ export function GrowthMachineProgress({ tables }: { tables: GrowthMachineTablePr
             <p className="truncate text-xs text-grey-500">
               {t.memberCount} {t.memberCount === 1 ? "member" : "members"}
               {t.builderName ? ` · ${t.builderName} building` : ""}
+              {t.status !== "not_started" ? ` · ${t.promptsCompleted}/${t.promptsTotal} prompts` : ""}
             </p>
           </div>
           {statusChip(t.status)}

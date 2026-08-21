@@ -168,6 +168,7 @@ export function AnalyticsPageClient({
   const [regrouping, setRegrouping] = React.useState(false);
   const [viewingBoardId, setViewingBoardId] = React.useState<string | null>(null);
   const [viewerSnapshot, setViewerSnapshot] = React.useState<unknown | null>(null);
+  const [viewerIndex, setViewerIndex] = React.useState<number | null>(null);
 
   // Regrouping (merging near-duplicate questions) changes which ids exist,
   // so it can't be applied as a local optimistic patch like toggleQuestion
@@ -278,15 +279,24 @@ export function AnalyticsPageClient({
     return { error };
   };
 
-  const handleViewBoard = async (boardId: string) => {
-    setViewingBoardId(boardId);
-    const { snapshot, error } = await getGrowthMachineBoardSnapshot(boardId);
+  const loadBoardAt = async (index: number) => {
+    const board = growthMachineBoards[index];
+    if (!board) return;
+    setViewingBoardId(board.boardId);
+    const { snapshot, error } = await getGrowthMachineBoardSnapshot(board.boardId);
     setViewingBoardId(null);
     if (error || !snapshot) {
       showToast(error ?? "Couldn't load this submission.", "error");
       return;
     }
     setViewerSnapshot(snapshot);
+    setViewerIndex(index);
+  };
+
+  const handleViewBoard = (boardId: string) => {
+    const index = growthMachineBoards.findIndex((b) => b.boardId === boardId);
+    if (index === -1) return;
+    loadBoardAt(index);
   };
 
   // Split into two worklists so it's clear at a glance what just needs an
@@ -559,8 +569,17 @@ export function AnalyticsPageClient({
       {toast}
       {profileModal}
       {badgeQrModal}
-      {viewerSnapshot !== null && (
-        <GrowthMachineBoardViewer snapshot={viewerSnapshot} onClose={() => setViewerSnapshot(null)} />
+      {viewerSnapshot !== null && viewerIndex !== null && (
+        <GrowthMachineBoardViewer
+          snapshot={viewerSnapshot}
+          tableName={growthMachineBoards[viewerIndex]?.tableName}
+          onClose={() => {
+            setViewerSnapshot(null);
+            setViewerIndex(null);
+          }}
+          onPrevBoard={viewerIndex > 0 ? () => loadBoardAt(viewerIndex - 1) : undefined}
+          onNextBoard={viewerIndex < growthMachineBoards.length - 1 ? () => loadBoardAt(viewerIndex + 1) : undefined}
+        />
       )}
     </div>
   );

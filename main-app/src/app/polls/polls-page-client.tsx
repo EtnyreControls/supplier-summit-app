@@ -2,6 +2,7 @@
 import * as React from "react";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import HowToVoteRoundedIcon from "@mui/icons-material/HowToVoteRounded";
 import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
@@ -22,20 +23,17 @@ import {
 } from "@/components";
 import { useSignOut } from "@/lib/supabase/use-sign-out";
 import { submitFeedback } from "@/lib/supabase/submit-feedback";
+import { submitPollVote } from "@/lib/supabase/submit-poll-vote";
 
 /**
- * Two tabs: Polls (scheduled + anytime, both rendered with the shared
- * PollCard) and Feedback (closing pulse stepper). "My questions" lives at
- * its own route (/questions) rather than as a tab here.
- *
- * - Scheduled polls are tied to a specific agenda session and stay
- *   `locked` (see polls.tsx) until that session starts, then behave like
- *   any other live poll; past ones flip to `showResults`.
- * - Anytime polls are open all day, no schedule gate — this is also where
- *   we collect running attendee sentiment on AI in supply chain/procurement.
- *
- * TODO: swap all mock poll/feedback data below for real Supabase queries
- * once wired up; scheduled unlock/close should move server-side too.
+ * Two tabs: Polls and Feedback, both driven by `feedback`/`feedback_questions`
+ * grouped per session by `response_group` ('poll' vs 'feedback' — see
+ * 20260821160000_feedback_question_response_groups.sql). A session's group
+ * can mix mcq/rating/text questions; a group with more than one question
+ * renders as a click-through stepper (SurveyGroupCard below) instead of
+ * separate cards. Each group stays `locked` until its linked agenda session
+ * ends, at which point a DB trigger flips it to `live`. "My questions" lives
+ * at its own route (/questions) rather than as a tab here.
  */
 
 type SectionKey = "polls" | "feedback";
@@ -45,131 +43,239 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactElement }[] =
   { key: "feedback", label: "Feedback", icon: <RateReviewRoundedIcon fontSize="small" /> },
 ];
 
-type ScheduledStatus = "closed" | "live" | "locked";
+export interface SurveyQuestion {
+  id: string;
+  question: string;
+  kind: "choice" | "text";
+  options?: PollOption[];
+  myAnswer: string | null;
+}
 
-interface ScheduledPoll {
+export interface SurveyGroup {
   id: string;
   tiedTo: string;
-  question: string;
-  status: ScheduledStatus;
+  live: boolean;
+  locked: boolean;
   lockLabel?: string;
-  options: PollOption[];
+  questions: SurveyQuestion[];
 }
-
-const SCHEDULED_POLLS: ScheduledPoll[] = [
-  {
-    id: "sp0",
-    tiedTo: "Registration & breakfast · 8:00 – 8:45 AM",
-    question: "How was check-in this morning?",
-    status: "closed",
-    options: [
-      { id: "o1", label: "Smooth", votes: 152 },
-      { id: "o2", label: "A few hiccups", votes: 21 },
-      { id: "o3", label: "Long wait", votes: 6 },
-    ],
-  },
-  {
-    id: "sp1",
-    tiedTo: "Supply chain roadmap keynote · 10:30 – 11:15 AM",
-    question: "Which roadmap priority should we dig into during the Q&A?",
-    status: "live",
-    options: [
-      { id: "o4", label: "Sourcing diversification", votes: 34 },
-      { id: "o5", label: "Digital PO & EDI rollout", votes: 41 },
-      { id: "o6", label: "Freight consolidation", votes: 19 },
-    ],
-  },
-  {
-    id: "sp2",
-    tiedTo: "Q&A with leadership · 11:15 AM – 12:00 PM",
-    question: "How confident are you in the 18-month roadmap after today's Q&A?",
-    status: "locked",
-    lockLabel: "Opens when the Q&A begins — 11:15 AM",
-    options: [
-      { id: "o7", label: "Very confident", votes: 0 },
-      { id: "o8", label: "Somewhat confident", votes: 0 },
-      { id: "o9", label: "Not sure yet", votes: 0 },
-    ],
-  },
-  {
-    id: "sp3",
-    tiedTo: "Manufacturing & quality breakout · 1:00 – 1:45 PM",
-    question: "Was the quality-gate walkthrough actionable for your team?",
-    status: "locked",
-    lockLabel: "Opens at 1:00 PM, right as the breakout starts",
-    options: [
-      { id: "o10", label: "Yes, ready to apply it", votes: 0 },
-      { id: "o11", label: "Somewhat — need more detail", votes: 0 },
-      { id: "o12", label: "Not really", votes: 0 },
-    ],
-  },
-];
-
-interface AnytimePoll {
-  id: string;
-  question: string;
-  options: PollOption[];
-}
-
-const ANYTIME_POLLS: AnytimePoll[] = [
-  {
-    id: "ap1",
-    question: "How do you feel about AI's growing role in supply chain & procurement?",
-    options: [
-      { id: "a1", label: "Excited — bring it on", votes: 58 },
-      { id: "a2", label: "Optimistic, with guardrails", votes: 77 },
-      { id: "a3", label: "Neutral / not sure yet", votes: 34 },
-      { id: "a4", label: "Cautious", votes: 22 },
-      { id: "a5", label: "Concerned", votes: 9 },
-    ],
-  },
-  {
-    id: "ap2",
-    question: "Which AI use case would help your team most this year?",
-    options: [
-      { id: "b1", label: "Demand forecasting", votes: 46 },
-      { id: "b2", label: "Automated quality inspection", votes: 39 },
-      { id: "b3", label: "Supplier risk scoring", votes: 28 },
-      { id: "b4", label: "Automated RFQs & PO matching", votes: 33 },
-    ],
-  },
-  {
-    id: "ap3",
-    question: "How is today's summit tracking against your expectations so far?",
-    options: [
-      { id: "c1", label: "Exceeding expectations", votes: 88 },
-      { id: "c2", label: "Meeting expectations", votes: 63 },
-      { id: "c3", label: "Below expectations", votes: 5 },
-    ],
-  },
-];
 
 function withVote(options: PollOption[], votedId: string | null | undefined) {
   if (!votedId) return options;
   return options.map((o) => (o.id === votedId ? { ...o, votes: o.votes + 1 } : o));
 }
 
-export function PollsPageClient() {
+/**
+ * Renders one session's poll/feedback group. A single question renders as
+ * one plain card; multiple questions render as a click-through stepper
+ * (Back/Next, same shell as the anonymous Summit feedback stepper) mixing
+ * PollCard steps for choice questions and text-input steps for free text.
+ */
+function SurveyGroupCard({
+  group,
+  freshVotes,
+  freshText,
+  drafts,
+  busyId,
+  onVote,
+  onDraftChange,
+  onSubmitText,
+}: {
+  group: SurveyGroup;
+  freshVotes: Record<string, string>;
+  freshText: Record<string, string>;
+  drafts: Record<string, string>;
+  busyId: string | null;
+  onVote: (questionId: string, optionLabel: string) => void;
+  onDraftChange: (questionId: string, value: string) => void;
+  onSubmitText: (questionId: string) => Promise<boolean>;
+}) {
+  const [step, setStep] = React.useState(0);
+  const total = group.questions.length;
+
+  const answerFor = (q: SurveyQuestion) =>
+    q.kind === "choice" ? (freshVotes[q.id] ?? q.myAnswer) : (freshText[q.id] ?? q.myAnswer);
+
+  if (group.locked) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-grey-500">
+          <ScheduleRoundedIcon sx={{ fontSize: 14 }} />
+          {group.tiedTo}
+        </p>
+        <div className="rounded-(--radius-card) border border-dashed border-grey-300 p-4">
+          <p className="text-xs font-medium text-grey-500">{group.lockLabel}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const allAnswered = group.questions.every((q) => answerFor(q) !== null && answerFor(q) !== undefined);
+  if (total > 1 && allAnswered) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-grey-500">
+          <ScheduleRoundedIcon sx={{ fontSize: 14 }} />
+          {group.tiedTo}
+        </p>
+        <div className="rounded-(--radius-card) border border-grey-200 bg-surface p-4">
+          <p className="text-sm font-medium text-ink">Thanks — you&apos;re all set here</p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {group.questions.map((q) => (
+              <li key={q.id}>
+                <p className="text-xs font-medium text-grey-500">{q.question}</p>
+                <p className="text-sm text-grey-700">{answerFor(q)}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
+  const q = group.questions[step];
+  const answer = answerFor(q);
+  const answered = answer !== null && answer !== undefined;
+  const last = step === total - 1;
+  const canAdvance = q.kind === "choice" ? answered : (drafts[q.id] ?? "").trim().length > 0;
+
+  const handleNext = async () => {
+    if (q.kind === "text" && !answered) {
+      const ok = await onSubmitText(q.id);
+      if (!ok) return;
+    }
+    if (!last) setStep((s) => s + 1);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-grey-500">
+        <ScheduleRoundedIcon sx={{ fontSize: 14 }} />
+        {group.tiedTo}
+      </p>
+
+      {total > 1 && (
+        <p className="text-xs font-semibold uppercase tracking-wider text-grey-500">
+          {step + 1} of {total}
+        </p>
+      )}
+
+      {q.kind === "choice" ? (
+        <PollCard
+          question={q.question}
+          live={group.live}
+          votedId={answer}
+          onVote={(optionId) => onVote(q.id, optionId)}
+          options={freshVotes[q.id] ? withVote(q.options ?? [], freshVotes[q.id]) : (q.options ?? [])}
+        />
+      ) : (
+        <div className="rounded-(--radius-card) border border-grey-200 bg-surface p-4">
+          <p className="text-[15px] font-semibold leading-snug text-ink">{q.question}</p>
+          {answered ? (
+            <p className="mt-3 text-sm text-grey-700">{answer}</p>
+          ) : (
+            <TextField
+              className="mt-3"
+              multiline
+              minRows={3}
+              placeholder="Share your thoughts"
+              value={drafts[q.id] ?? ""}
+              onChange={(e) => onDraftChange(q.id, e.target.value)}
+              fullWidth
+            />
+          )}
+        </div>
+      )}
+
+      {total > 1 && (
+        <div className="mt-1 flex justify-between">
+          <Button size="small" variant="text" color="secondary" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+            Back
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            color="primary"
+            disabled={(!canAdvance && !answered) || busyId === q.id || (last && answered)}
+            onClick={handleNext}
+          >
+            {last ? "Done" : "Next"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PollsPageClient({
+  scheduledPolls,
+  sessionFeedback,
+}: {
+  scheduledPolls: SurveyGroup[];
+  sessionFeedback: SurveyGroup[];
+}) {
   const { toast, showToast } = useToast();
   const handleLogout = useSignOut();
   const { profileModal, openProfile } = useProfileModal();
   const { badgeQrModal, openBadgeQr } = useBadgeQrModal();
   const [section, setSection] = React.useState<SectionKey>("polls");
-  const [scheduledVotes, setScheduledVotes] = React.useState<Record<string, string>>({});
-  const [anytimeVotes, setAnytimeVotes] = React.useState<Record<string, string>>({});
+  const [freshVotes, setFreshVotes] = React.useState<Record<string, string>>({});
+  const [freshText, setFreshText] = React.useState<Record<string, string>>({});
+  const [drafts, setDrafts] = React.useState<Record<string, string>>({});
+  const [busyId, setBusyId] = React.useState<string | null>(null);
   const [rating, setRating] = React.useState<string | null>(null);
   const [comment, setComment] = React.useState("");
   const [feedbackSubmitted, setFeedbackSubmitted] = React.useState(false);
   const [submittingFeedback, setSubmittingFeedback] = React.useState(false);
 
-  const voteScheduled = (pollId: string, optionId: string) => {
-    setScheduledVotes((v) => (v[pollId] ? v : { ...v, [pollId]: optionId }));
+  const voteChoice = async (questionId: string, optionLabel: string) => {
+    if (freshVotes[questionId]) return;
+    setFreshVotes((v) => ({ ...v, [questionId]: optionLabel }));
+    const { error } = await submitPollVote(questionId, optionLabel);
+    if (error) {
+      setFreshVotes((v) => {
+        const next = { ...v };
+        delete next[questionId];
+        return next;
+      });
+      showToast(error, "error");
+      return;
+    }
     showToast("Vote recorded");
   };
-  const voteAnytime = (pollId: string, optionId: string) => {
-    setAnytimeVotes((v) => (v[pollId] ? v : { ...v, [pollId]: optionId }));
-    showToast("Vote recorded");
+
+  const submitText = async (questionId: string): Promise<boolean> => {
+    const value = (drafts[questionId] ?? "").trim();
+    if (!value) return false;
+    setBusyId(questionId);
+    const { error } = await submitPollVote(questionId, value);
+    setBusyId(null);
+    if (error) {
+      showToast(error, "error");
+      return false;
+    }
+    setFreshText((v) => ({ ...v, [questionId]: value }));
+    showToast("Feedback submitted — thank you");
+    return true;
   };
+
+  const renderGroups = (groups: SurveyGroup[]) => (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {groups.map((group) => (
+        <SurveyGroupCard
+          key={group.id}
+          group={group}
+          freshVotes={freshVotes}
+          freshText={freshText}
+          drafts={drafts}
+          busyId={busyId}
+          onVote={voteChoice}
+          onDraftChange={(questionId, value) => setDrafts((v) => ({ ...v, [questionId]: value }))}
+          onSubmitText={submitText}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <div className="min-h-dvh bg-background">
@@ -201,56 +307,32 @@ export function PollsPageClient() {
         {section === "polls" && (
           <>
             <Banner>
-              Scheduled polls unlock automatically as each session begins — check back
-              throughout the day. Anytime polls are open right now.
+              Scheduled polls unlock automatically once each session ends — check back
+              throughout the day.
             </Banner>
 
             <SectionHeader eyebrow="Tied to today's agenda" title="Scheduled polls" />
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {SCHEDULED_POLLS.map((poll) => (
-                <div key={poll.id} className="flex flex-col gap-1.5">
-                  <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-grey-500">
-                    <ScheduleRoundedIcon sx={{ fontSize: 14 }} />
-                    {poll.tiedTo}
-                  </p>
-                  <PollCard
-                    question={poll.question}
-                    live={poll.status === "live"}
-                    locked={poll.status === "locked"}
-                    lockLabel={poll.lockLabel}
-                    showResults={poll.status === "closed"}
-                    votedId={scheduledVotes[poll.id] ?? null}
-                    onVote={(optionId) => voteScheduled(poll.id, optionId)}
-                    options={
-                      poll.status === "live" ? withVote(poll.options, scheduledVotes[poll.id]) : poll.options
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-
-            <SectionHeader eyebrow="Open all day" title="Anytime polls" />
-            <Banner>
-              We&apos;re gauging supplier sentiment on AI adoption below — your answers
-              feed directly into next quarter&apos;s roadmap conversation.
-            </Banner>
-            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {ANYTIME_POLLS.map((poll) => (
-                <PollCard
-                  key={poll.id}
-                  question={poll.question}
-                  live
-                  votedId={anytimeVotes[poll.id] ?? null}
-                  onVote={(optionId) => voteAnytime(poll.id, optionId)}
-                  options={withVote(poll.options, anytimeVotes[poll.id])}
-                />
-              ))}
-            </div>
+            {scheduledPolls.length === 0 ? (
+              <EmptyState
+                icon={<HowToVoteRoundedIcon sx={{ fontSize: 36 }} />}
+                title="No polls yet"
+                body="Session polls will show up here as today's agenda gets underway."
+              />
+            ) : (
+              renderGroups(scheduledPolls)
+            )}
           </>
         )}
 
         {section === "feedback" && (
           <>
+            {sessionFeedback.length > 0 && (
+              <>
+                <SectionHeader eyebrow="Tied to today's agenda" title="Session feedback" />
+                {renderGroups(sessionFeedback)}
+              </>
+            )}
+
             <SectionHeader eyebrow="Quick pulse" title="Summit feedback" />
             {feedbackSubmitted ? (
               <EmptyState

@@ -14,12 +14,14 @@ export function FeedbackStepper({
   canAdvance = () => true,
   onComplete,
   completeLabel = "Submit feedback",
+  badge = "Anonymous",
 }: {
   steps: string[];
   children: (stepIndex: number) => React.ReactNode;
   canAdvance?: (stepIndex: number) => boolean;
   onComplete: () => void;
   completeLabel?: string;
+  badge?: string | null;
 }) {
   const [step, setStep] = React.useState(0);
   const last = step === steps.length - 1;
@@ -31,7 +33,7 @@ export function FeedbackStepper({
         <p className="text-xs font-semibold uppercase tracking-wider text-grey-600">
           {step + 1} of {steps.length}
         </p>
-        <p className="text-xs text-grey-500">Anonymous</p>
+        {badge && <p className="text-xs text-grey-500">{badge}</p>}
       </div>
       <LinearProgress variant="determinate" value={pct} aria-label="Survey progress" />
       <h3 className="mt-4 text-[16px] font-semibold text-ink">{steps[step]}</h3>

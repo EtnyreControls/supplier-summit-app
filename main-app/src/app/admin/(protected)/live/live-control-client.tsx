@@ -13,8 +13,8 @@ import {
   clearGeneralCountdown,
 } from "@/lib/supabase/admin/admin-live";
 
-type EventRow = { event_id: string; topic: string; status: string };
-type FeedbackRow = { poll_id: string; poll_name: string | null; status: string };
+type EventRow = { event_id: string; event_name: string; status: string };
+type FeedbackRow = { feedback_id: string; feedback_name: string | null; status: string };
 type LiveState = {
   general_countdown_label: string | null;
   general_countdown_ends_at: string | null;
@@ -145,15 +145,17 @@ export function LiveControlClient({
   };
 
   const toggleFeedback = async (row: FeedbackRow) => {
-    setBusyId(row.poll_id);
+    setBusyId(row.feedback_id);
     const nextStatus = row.status === "live" ? "locked" : "live";
-    const { error } = await setFeedbackStatus(row.poll_id, nextStatus);
+    const { error } = await setFeedbackStatus(row.feedback_id, nextStatus);
     setBusyId(null);
     if (error) {
       showToast(error, "error");
       return;
     }
-    setFeedback((prev) => prev.map((f) => (f.poll_id === row.poll_id ? { ...f, status: nextStatus } : f)));
+    setFeedback((prev) =>
+      prev.map((f) => (f.feedback_id === row.feedback_id ? { ...f, status: nextStatus } : f)),
+    );
   };
 
   return (
@@ -172,7 +174,7 @@ export function LiveControlClient({
               className="flex items-center justify-between rounded-(--radius-card) border border-grey-200 p-3"
             >
               <div>
-                <p className="text-sm font-medium text-ink">{e.topic}</p>
+                <p className="text-sm font-medium text-ink">{e.event_name}</p>
                 <p className="text-xs text-grey-500">{e.status}</p>
               </div>
               <Button
@@ -194,18 +196,18 @@ export function LiveControlClient({
         <ul className="mt-2 flex flex-col gap-2">
           {feedback.map((f) => (
             <li
-              key={f.poll_id}
+              key={f.feedback_id}
               className="flex items-center justify-between rounded-(--radius-card) border border-grey-200 p-3"
             >
               <div>
-                <p className="text-sm font-medium text-ink">{f.poll_name ?? "Untitled"}</p>
+                <p className="text-sm font-medium text-ink">{f.feedback_name ?? "Untitled"}</p>
                 <p className="text-xs text-grey-500">{f.status}</p>
               </div>
               <Button
                 size="small"
                 variant={f.status === "live" ? "outlined" : "contained"}
                 color={f.status === "live" ? "secondary" : "primary"}
-                disabled={busyId === f.poll_id}
+                disabled={busyId === f.feedback_id}
                 onClick={() => toggleFeedback(f)}
               >
                 {f.status === "live" ? "Close" : "Open"}

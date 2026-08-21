@@ -29,7 +29,7 @@ export default async function AdminStatusPage() {
     supabase.from("feedback_responses").select("*", { count: "exact", head: true }),
     supabase.from("contacts").select("*", { count: "exact", head: true }),
     supabase.from("growth_machine_entries").select("*", { count: "exact", head: true }),
-    supabase.from("event").select("event_id, topic").eq("status", "live"),
+    supabase.from("event").select("event_id, event_name").eq("status", "live"),
     getSyncServerHealth(),
   ]);
 
@@ -60,7 +60,7 @@ export default async function AdminStatusPage() {
           <ul className="mt-2 flex flex-col gap-1">
             {liveEvents.data.map((e) => (
               <li key={e.event_id} className="text-sm text-grey-700">
-                {e.topic}
+                {e.event_name}
               </li>
             ))}
           </ul>

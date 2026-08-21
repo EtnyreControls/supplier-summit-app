@@ -6,16 +6,16 @@ import { crudCreate, crudDelete, crudList, crudUpdate } from "./crud-helpers";
 const PATH = "/admin/feedback";
 
 export type AdminFeedback = {
-  poll_id: string;
-  poll_name: string | null;
+  feedback_id: string;
+  feedback_name: string | null;
   description: string | null;
   status: "locked" | "live" | "unlocked" | null;
   is_anonymous: boolean | null;
   event_id: string | null;
 };
 export type AdminFeedbackQuestion = {
-  poll_question_id: string;
-  poll_id: string;
+  feedback_question_id: string;
+  feedback_id: string;
   question_text: string;
   question_type: "mcq" | "text" | "rating";
   options: string | null;
@@ -30,12 +30,12 @@ export async function createFeedback(values: Partial<AdminFeedback>) {
   return result;
 }
 export async function updateFeedback(id: string, values: Partial<AdminFeedback>) {
-  const result = await crudUpdate("feedback", "poll_id", id, values);
+  const result = await crudUpdate("feedback", "feedback_id", id, values);
   if (!result.error) revalidatePath(PATH);
   return result;
 }
 export async function deleteFeedback(id: string) {
-  const result = await crudDelete("feedback", "poll_id", id);
+  const result = await crudDelete("feedback", "feedback_id", id);
   if (!result.error) revalidatePath(PATH);
   return result;
 }
@@ -49,12 +49,12 @@ export async function createFeedbackQuestion(values: Partial<AdminFeedbackQuesti
   return result;
 }
 export async function updateFeedbackQuestion(id: string, values: Partial<AdminFeedbackQuestion>) {
-  const result = await crudUpdate("feedback_questions", "poll_question_id", id, values);
+  const result = await crudUpdate("feedback_questions", "feedback_question_id", id, values);
   if (!result.error) revalidatePath(PATH);
   return result;
 }
 export async function deleteFeedbackQuestion(id: string) {
-  const result = await crudDelete("feedback_questions", "poll_question_id", id);
+  const result = await crudDelete("feedback_questions", "feedback_question_id", id);
   if (!result.error) revalidatePath(PATH);
   return result;
 }

@@ -13,7 +13,7 @@ import {
 } from "@/lib/supabase/admin/admin-feedback";
 
 const FEEDBACK_FIELDS: EntityField[] = [
-  { name: "poll_name", label: "Name", required: true },
+  { name: "feedback_name", label: "Name", required: true },
   { name: "description", label: "Description", type: "textarea" },
   {
     name: "status",
@@ -30,7 +30,7 @@ const FEEDBACK_FIELDS: EntityField[] = [
 ];
 
 const QUESTION_FIELDS: EntityField[] = [
-  { name: "poll_id", label: "Feedback ID", required: true },
+  { name: "feedback_id", label: "Feedback ID", required: true },
   { name: "question_text", label: "Question text", type: "textarea", required: true },
   {
     name: "question_type",
@@ -62,11 +62,11 @@ export function FeedbackAdminClient({
 
       <CrudSection
         title="Feedback surveys"
-        idKey="poll_id"
+        idKey="feedback_id"
         rows={feedback}
         setRows={setFeedback}
         columns={[
-          { key: "poll_name", label: "Name" },
+          { key: "feedback_name", label: "Name" },
           { key: "status", label: "Status" },
         ]}
         fields={FEEDBACK_FIELDS}
@@ -77,7 +77,7 @@ export function FeedbackAdminClient({
 
       <CrudSection
         title="Feedback questions"
-        idKey="poll_question_id"
+        idKey="feedback_question_id"
         rows={questions}
         setRows={setQuestions}
         columns={[

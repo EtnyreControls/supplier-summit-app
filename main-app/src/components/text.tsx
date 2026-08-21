@@ -8,6 +8,7 @@ import {
   getSnapshot,
   createTLStore,
   loadSnapshot,
+  renderPlaintextFromRichText,
   type Editor,
   type TLComponents,
   type TLPageId,
@@ -33,7 +34,7 @@ import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownR
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined'
 import Collapse from '@mui/material/Collapse'
 import { useRouter } from 'next/navigation'
-import { submitGrowthMachineBoard } from '@/lib/supabase/growth-machine'
+import { submitGrowthMachineBoard, submitGrowthMachinePrompt, type MachinePart } from '@/lib/supabase/growth-machine'
 import { getLatestGrowthMachineBoardForTable } from '@/lib/supabase/get-growth-machine-board'
 import { AsphaltDistributorLoader } from './asphalt-distributor-loader'
 
@@ -125,6 +126,28 @@ const PROMPT_COMPLETIONS = [
   'Our Turbo Boost idea is... This would accelerate growth by...',
 ]
 const PROMPT_COUNT = PROMPT_HEADINGS.length
+// Same order as PROMPT_HEADINGS — matches the DB's machine_part enum (see
+// 20260821170000_growth_machine_prompt_progress.sql), which is how each
+// prompt's progress entry is keyed.
+const MACHINE_PARTS: MachinePart[] = ['engine', 'fuel', 'gears', 'brakes', 'turbo_boost']
+
+// Best-effort plain-text summary of what's on a prompt page, for
+// analytics' live progress view (not the drawing itself — that only lives
+// in the tldraw sync room until the final board snapshot). Freehand-only
+// pages with no text shapes just record an empty summary alongside the
+// "submitted" marker.
+function extractPageText(editor: Editor, pageId: TLPageId): string {
+  const texts: string[] = [];
+  for (const shapeId of editor.getPageShapeIds(pageId)) {
+    const shape = editor.getShape(shapeId);
+    if (!shape || shape.isLocked) continue;
+    const richText = (shape.props as { richText?: unknown }).richText;
+    if (!richText) continue;
+    const text = renderPlaintextFromRichText(editor, richText as Parameters<typeof renderPlaintextFromRichText>[1]).trim();
+    if (text) texts.push(text);
+  }
+  return texts.join('\n');
+}
 
 /**
  * Collapsed-by-default hint strip rendered under the prompt nav bar (both
@@ -365,6 +388,17 @@ function BuilderFlow({
   if (!pageIds || checkingSubmission) return <AsphaltDistributorLoader label="Loading board" />;
 
   const goToPage = (i: number) => {
+    // Record the prompt being left (not the one being entered) so analytics
+    // sees progress update the moment the Builder moves on, not only once
+    // they reach Review at the end. Fire-and-forget — a dropped connection
+    // here shouldn't block navigation.
+    const leavingId = pageIds[index];
+    const leavingShapeIds = [...editor.getPageShapeIds(leavingId)];
+    const hasDrawing = leavingShapeIds.some((sid) => !editor.getShape(sid)?.isLocked);
+    if (hasDrawing) {
+      submitGrowthMachinePrompt(roomId, MACHINE_PARTS[index], extractPageText(editor, leavingId)).catch(() => {});
+    }
+
     editor.setCurrentPage(pageIds[i]);
     setIndex(i);
     // Each page has its own independent camera — without this, only the
@@ -375,12 +409,23 @@ function BuilderFlow({
   const enterReview = async () => {
     setCameFromReview(false);
     setGenerating(true);
+    // toImage() rasterizes synchronously — if the heading/completion shapes'
+    // custom serif webfont hasn't finished loading yet, their text renders
+    // as a blank box instead of the actual glyphs. document.fonts.ready
+    // resolves once every @font-face on the page has loaded.
+    await document.fonts.ready;
     const entries = await Promise.all(
-      pageIds.map(async (id) => {
+      pageIds.map(async (id, i) => {
         const shapeIds = [...editor.getPageShapeIds(id)];
         // Every page always has at least the locked heading shape — "empty"
         // means nothing else has been drawn, not literally zero shapes.
         const hasDrawing = shapeIds.some((sid) => !editor.getShape(sid)?.isLocked);
+        if (hasDrawing) {
+          // Fire-and-forget: records this prompt's progress for analytics.
+          // Not blocking on the result — a dropped connection here shouldn't
+          // stop the Builder from reviewing/submitting their board.
+          submitGrowthMachinePrompt(roomId, MACHINE_PARTS[i], extractPageText(editor, id)).catch(() => {});
+        }
         if (!hasDrawing) return [id, null] as const;
         const result = await editor.toImage(shapeIds, { format: 'png', background: true });
         return [id, result ? URL.createObjectURL(result.blob) : null] as const;
@@ -393,6 +438,14 @@ function BuilderFlow({
     }
     setThumbnails(next);
     setGenerating(false);
+
+    // All 5 prompts have a drawing — auto-finalize the board instead of
+    // making the Builder land on review and click Submit themselves.
+    if (entries.every(([, url]) => url)) {
+      setMode('review');
+      await submitBoard();
+      return;
+    }
     setMode('review');
   };
 
@@ -441,9 +494,9 @@ function BuilderFlow({
         <p className="mt-1 text-center text-sm text-grey-600">
           All 5 prompts, side by side — submit when you&apos;re happy with them.
         </p>
-        <div className="mx-auto mt-6 grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mx-auto mt-6 flex w-full max-w-6xl flex-wrap justify-center gap-6">
           {pageIds.map((id, i) => (
-            <div key={id} className="flex flex-col items-center gap-2">
+            <div key={id} className="flex w-full flex-col items-center gap-2 sm:w-[45%] lg:w-80">
               <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-(--radius-card) border border-grey-200 bg-surface">
                 {thumbnails[id] ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -581,6 +634,23 @@ function SpectatorPromptNav({ editor }: { editor: Editor }) {
     if (pageIds) goToPage(0, pageIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageIds]);
+
+  // Keep the displayed prompt number in sync with the editor's actual
+  // current page, not just this component's own goToPage calls — Follow
+  // mode (FollowBuilderToggle, via tldraw's startFollowingUser) changes
+  // currentPageId directly on the editor as the Builder advances, and
+  // without this the prompt bar would keep showing whatever page the
+  // Spectator last picked manually instead of tracking the Builder live.
+  // currentPageId lives on the 'instance' record (scope: 'session').
+  React.useEffect(() => {
+    if (!pageIds) return;
+    const sync = () => {
+      const i = pageIds.indexOf(editor.getCurrentPageId());
+      if (i !== -1) setIndex(i);
+    };
+    sync();
+    return editor.store.listen(sync, { scope: 'session', source: 'all' });
+  }, [editor, pageIds]);
 
   if (!pageIds) return null;
   const isLast = index === PROMPT_COUNT - 1;
@@ -1016,10 +1086,17 @@ function GrowthMachineCanvas({
  */
 export function GrowthMachineBoardViewer({
   snapshot,
+  tableName,
   onClose,
   editHref,
+  onPrevBoard,
+  onNextBoard,
 }: {
   snapshot: unknown;
+  // Shown as the heading instead of the generic "Submitted board" — the
+  // analytics browser passes the submitting table's name; omitted where
+  // there's only ever one table's own board to look at (/growth-machine).
+  tableName?: string;
   // Optional — when this viewer replaces the role picker entirely (a
   // table that's already submitted, see /growth-machine's page.tsx),
   // there's nothing to "close" back to.
@@ -1028,6 +1105,10 @@ export function GrowthMachineBoardViewer({
   // current Builder should get this (checked by the caller), so it's
   // opt-in rather than this component re-deriving that itself.
   editHref?: string;
+  // Browse to the adjacent table's submission (analytics only) — undefined
+  // at either end of the list hides that arrow instead of disabling it.
+  onPrevBoard?: () => void;
+  onNextBoard?: () => void;
 }) {
   const router = useRouter();
   const [store] = React.useState(() => {
@@ -1048,6 +1129,10 @@ export function GrowthMachineBoardViewer({
     if (!editor) return;
     let cancelled = false;
     (async () => {
+      // See BuilderFlow's enterReview — same font-not-loaded-yet blank-box
+      // export bug, same fix.
+      await document.fonts.ready;
+      if (cancelled) return;
       const ids = editor.getPages().slice(0, PROMPT_COUNT).map((p) => p.id);
       const entries = await Promise.all(
         ids.map(async (id) => {
@@ -1089,8 +1174,20 @@ export function GrowthMachineBoardViewer({
     <div className="fixed inset-0 z-[600] bg-background">
       {/* Always mounted (so the editor exists to generate thumbnails and
           can be framed instantly on selection) but only actually shown in
-          single-page mode — the grid is a separate overlay on top. */}
-      <div style={{ position: 'fixed', inset: 0, visibility: selectedIndex === null ? 'hidden' : 'visible' }}>
+          single-page mode — the grid (rendered later below, so it stacks on
+          top with no z-index needed) covers it visually otherwise.
+          Deliberately opacity+pointer-events instead of visibility:hidden —
+          toImage() rasterizes each shape's live HTML via an SVG
+          foreignObject, and a visibility:hidden ancestor was silently
+          skipping paint for that content, exporting blank thumbnails. */}
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          opacity: selectedIndex === null ? 0 : 1,
+          pointerEvents: selectedIndex === null ? 'none' : 'auto',
+        }}
+      >
         <Tldraw
           store={store}
           hideUi
@@ -1134,18 +1231,13 @@ export function GrowthMachineBoardViewer({
       )}
 
       <div className="pointer-events-none fixed inset-x-0 top-0 z-[610] flex items-center justify-between p-3">
-        {selectedIndex !== null ? (
-          <Button
-            variant="outlined"
-            className="pointer-events-auto"
-            onClick={() => setSelectedIndex(null)}
-            sx={{ bgcolor: '#fff' }}
-          >
-            Back to all prompts
-          </Button>
-        ) : (
-          <span />
-        )}
+        <div className="pointer-events-auto flex items-center gap-2">
+          {selectedIndex !== null && (
+            <Button variant="outlined" onClick={() => setSelectedIndex(null)} sx={{ bgcolor: '#fff' }}>
+              Back to all prompts
+            </Button>
+          )}
+        </div>
         <div className="pointer-events-auto flex gap-2">
           {editHref && (
             <Button
@@ -1164,18 +1256,42 @@ export function GrowthMachineBoardViewer({
         </div>
       </div>
 
+      {/* Flanks the board itself (grid or single-page) rather than sitting
+          in the top bar with the other controls — browses to the adjacent
+          table's submission (analytics only). */}
+      {onPrevBoard && (
+        <IconButton
+          aria-label="Previous table's board"
+          onClick={onPrevBoard}
+          className="pointer-events-auto fixed left-3 top-1/2 z-[610] -translate-y-1/2"
+          sx={{ bgcolor: '#000', color: '#fff', '&:hover': { bgcolor: '#000' } }}
+        >
+          <ArrowBackIosNewRoundedIcon />
+        </IconButton>
+      )}
+      {onNextBoard && (
+        <IconButton
+          aria-label="Next table's board"
+          onClick={onNextBoard}
+          className="pointer-events-auto fixed right-3 top-1/2 z-[610] -translate-y-1/2"
+          sx={{ bgcolor: '#000', color: '#fff', '&:hover': { bgcolor: '#000' } }}
+        >
+          <ArrowForwardIosRoundedIcon />
+        </IconButton>
+      )}
+
       {selectedIndex === null && (
         <div className="fixed inset-0 overflow-auto p-6 pt-20">
-          <h1 className="text-center text-xl font-bold text-ink">Submitted board</h1>
+          <h1 className="text-center text-xl font-bold text-ink">{tableName ?? "Submitted board"}</h1>
           <p className="mt-1 text-center text-sm text-grey-600">All 5 prompts — tap one to view it full-size.</p>
           {pageIds ? (
-            <div className="mx-auto mt-6 grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mx-auto mt-6 flex w-full max-w-6xl flex-wrap justify-center gap-6">
               {pageIds.map((id, i) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => goToPage(i)}
-                  className="flex flex-col items-center gap-2 text-left"
+                  className="flex w-full flex-col items-center gap-2 text-left sm:w-[45%] lg:w-80"
                 >
                   <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-(--radius-card) border border-grey-200 bg-surface">
                     {thumbnails[id] ? (

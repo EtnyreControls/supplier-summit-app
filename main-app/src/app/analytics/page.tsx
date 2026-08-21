@@ -50,6 +50,7 @@ type FeedbackTopicRow = {
 type EventTableRow = { table_id: string; table_name: string | null };
 type TableMemberRow = { table_id: string; user_id: string; is_builder: boolean | null };
 type GrowthBoardRow = { board_id: string; table_id: string; submitted_by: string | null; created_at: string };
+type GrowthEntryRow = { table_id: string; part: string };
 type UserNameRow = { user_id: string; first_name: string | null; last_name: string | null };
 
 function fullName(row: Pick<UserNameRow, "first_name" | "last_name"> | undefined): string {
@@ -252,6 +253,16 @@ export default async function AnalyticsPage() {
     .order("created_at", { ascending: false })
     .returns<GrowthBoardRow[]>();
 
+  const { data: entryRows } = await supabase
+    .from("growth_machine_entries")
+    .select("table_id, part")
+    .returns<GrowthEntryRow[]>();
+  const promptsCompletedByTable = new Map<string, number>();
+  for (const e of entryRows ?? []) {
+    promptsCompletedByTable.set(e.table_id, (promptsCompletedByTable.get(e.table_id) ?? 0) + 1);
+  }
+  const PROMPTS_TOTAL = 5;
+
   const userIds = Array.from(
     new Set([
       ...(memberRows ?? []).map((m) => m.user_id),
@@ -286,16 +297,25 @@ export default async function AnalyticsPage() {
       memberCount: members.length,
       submissionCount: boards.length,
       lastSubmittedAt: boards[0]?.created_at ?? null,
+      promptsCompleted: promptsCompletedByTable.get(t.table_id) ?? 0,
+      promptsTotal: PROMPTS_TOTAL,
     };
   });
 
-  const growthMachineBoards: GrowthMachineBoardSummary[] = (boardRows ?? []).map((b) => ({
-    boardId: b.board_id,
-    tableId: b.table_id,
-    tableName: tableNameById.get(b.table_id) ?? "Unknown table",
-    submittedByName: fullName(b.submitted_by ? userById.get(b.submitted_by) : undefined),
-    createdAt: b.created_at,
-  }));
+  // boardsByTable's arrays are ordered by created_at desc (from boardRows'
+  // own ordering above), so [0] per table is each table's latest submission
+  // — older re-submissions from the same table aren't worth browsing.
+  const growthMachineBoards: GrowthMachineBoardSummary[] = (tableRows ?? [])
+    .map((t) => boardsByTable.get(t.table_id)?.[0])
+    .filter((b): b is GrowthBoardRow => b != null)
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    .map((b) => ({
+      boardId: b.board_id,
+      tableId: b.table_id,
+      tableName: tableNameById.get(b.table_id) ?? "Unknown table",
+      submittedByName: fullName(b.submitted_by ? userById.get(b.submitted_by) : undefined),
+      createdAt: b.created_at,
+    }));
 
   return (
     <AnalyticsPageClient

@@ -18,11 +18,11 @@ export async function setEventLive(eventId: string, live: boolean) {
   return { error: null };
 }
 
-/** Opens/closes a feedback window (poll_status: locked/live/unlocked). */
+/** Opens/closes a feedback window (feedback_status: locked/live/unlocked). */
 export async function setFeedbackStatus(feedbackId: string, status: "locked" | "live" | "unlocked") {
   await requireAdmin();
   const admin = createAdminClient();
-  const { error } = await admin.from("feedback").update({ status }).eq("poll_id", feedbackId);
+  const { error } = await admin.from("feedback").update({ status }).eq("feedback_id", feedbackId);
   if (error) return { error: error.message };
   revalidatePath("/admin/live");
   return { error: null };

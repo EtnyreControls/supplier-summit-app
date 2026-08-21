@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export type MachinePart = "engine" | "fuel" | "gears" | "brakes" | "turbo_boost";
+
 /**
  * Resolves the caller's Growth Machine table and claims (or releases) the
  * builder seat — see enter_growth_machine() in the
@@ -79,6 +81,35 @@ export async function submitGrowthMachineBoard(
 
   if (error) {
     return { error: "Couldn't submit the board. Please try again." };
+  }
+  return { error: null };
+}
+
+/**
+ * Records the Builder's progress on one of the 5 prompts (see
+ * PROMPT_HEADINGS in components/text.tsx) as they finish it, so analytics
+ * can see live per-prompt progress instead of only a final not_started /
+ * building / submitted state. Re-submitting the same part overwrites its
+ * prior content — see submit_growth_machine_prompt()'s ON CONFLICT upsert.
+ */
+export async function submitGrowthMachinePrompt(
+  tableId: string,
+  part: MachinePart,
+  content: string,
+): Promise<{ error: string | null }> {
+  if (!UUID_RE.test(tableId)) {
+    return { error: "No table assigned — progress wasn't saved." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("submit_growth_machine_prompt", {
+    p_table_id: tableId,
+    p_part: part,
+    p_content: content,
+  });
+
+  if (error) {
+    return { error: "Couldn't save your progress. Please try again." };
   }
   return { error: null };
 }
