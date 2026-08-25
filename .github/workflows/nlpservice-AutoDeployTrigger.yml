@@ -1,0 +1,54 @@
+name: Trigger auto deployment for nlp-service
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches:
+      [ main ]
+    paths:
+    - 'nlp-service/**'
+    - '.github/workflows/nlpservice-AutoDeployTrigger.yml'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          # Reuses growthmachinesync's identity rather than requiring new
+          # NLPSERVICE_* secrets — same resource group (it has Contributor
+          # there, not just on that one Container App) and same registry
+          # (already has AcrPush on it), confirmed via its Azure role
+          # assignments, so nothing new needs granting for this to work.
+          client-id: ${{ secrets.GROWTHMACHINESYNC_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.GROWTHMACHINESYNC_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.GROWTHMACHINESYNC_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          # Points the build at the nlp-service subfolder specifically
+          # (this is a monorepo — the repo root has no Dockerfile, which is
+          # why this would fall back to Oryx buildpacks and fail instead of
+          # using the real Dockerfile, same reasoning as growthmachinesync).
+          appSourcePath: ${{ github.workspace }}/nlp-service
+          dockerfilePath: Dockerfile
+          registryUrl: growthmachine-are9ehaxdce5cnaa.azurecr.io
+          registryUsername: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.GROWTHMACHINESYNC_REGISTRY_PASSWORD }}
+          imageToBuild: growthmachine-are9ehaxdce5cnaa.azurecr.io/nlpservice:${{ github.sha }}
+          containerAppName: nlp-service
+          resourceGroup: app-etnyre-supplier-prod_group
+          targetPort: 8080

@@ -6,10 +6,19 @@ import type { AddressableItem } from "@/components";
 import { SpeakerPageClient } from "./speaker-page-client";
 
 /**
- * Route: /speaker ("Speaker Inbox" in TopNav — only shown there for
- * role="speaker" users, see top-nav.tsx). Server Component: same real-role
- * access-control pattern as /analytics (app/analytics/page.tsx) — hiding the
- * nav link doesn't stop someone hitting the URL directly.
+ * Route: /speaker ("Speaker Inbox" in TopNav — shown there for role="speaker"
+ * users, see top-nav.tsx). Server Component: same real-role access-control
+ * pattern as /analytics (app/analytics/page.tsx) — hiding the nav link
+ * doesn't stop someone hitting the URL directly.
+ *
+ * Also lets role="analytics" in: some analytics accounts (e.g. Zoey, Pranav)
+ * are themselves speaking at sessions and need their own inbox alongside
+ * their analytics access, rather than trading one for the other. Safe to
+ * relax at the page level because the actual data access below is scoped by
+ * the signed-in user's speakers rows (see RLS: "speaker view routed
+ * groups"/"speaker decide own pending routing" key off speakers.user_id =
+ * auth.uid(), not role) — an analytics user with no speakers row just sees
+ * an empty inbox, same as a speaker account would.
  *
  * Shows the same grouped/checkbox/answer format as analytics' Questions tab
  * (AddressableList) rather than a bare Accept/Decline queue — answering a
@@ -65,7 +74,7 @@ export default async function SpeakerPage() {
     ? await supabase.from("user").select("role").eq("user_id", authUser.id).single()
     : { data: null };
 
-  if (profile?.role !== "speaker") {
+  if (profile?.role !== "speaker" && profile?.role !== "analytics") {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center px-5 text-center">
         <EmptyState

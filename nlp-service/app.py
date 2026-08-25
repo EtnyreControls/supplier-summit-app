@@ -76,6 +76,15 @@ ANALYTICS_SPEAKER_ID = "00000000-0000-0000-0000-00000000a17c"
 # (Strategic Partnership today — that session has no speaker assigned in the
 # database yet) fall straight through to the Analytics escalation step in
 # route_question, same as a tag that IS mapped but already declined.
+#
+# "Procurement" / "Strategic Sourcing" split per the RACI matrix Zoey shared
+# (Supply Chain Responsibilities.xlsx): Procurement Operations (POs,
+# expediting, delivery issues, shortages, buying cadence) is Shannon's;
+# Strategic Sourcing & Category Management (category strategy, negotiations,
+# contracts, supplier development) is Zoey/Pranav's. Only one speaker_id per
+# tag is supported here, so Pranav is the auto-routed primary for Strategic
+# Sourcing — Zoey is reachable via the analytics Reassign dropdown, same as
+# any other declined/manual case.
 TAG_SPEAKER_IDS = {
     "general": ANALYTICS_SPEAKER_ID,
     "growth machine": ANALYTICS_SPEAKER_ID,
@@ -88,6 +97,8 @@ TAG_SPEAKER_IDS = {
     "summit objectives": "31be750c-fd1c-494a-9bdb-816cd7f59cb1",
     "executive growth strategy": "f774ab2c-2ac9-4125-b1b4-cc89076ea4ba",
     "global growth": "e759a745-73c1-45db-824e-c0ac0e5dc215",
+    "procurement": "734b81a2-61ac-4b55-ab45-444654c13bd0",  # Shannon Mulcahy
+    "strategic sourcing": "b3672f78-1e35-4cc3-b7d7-38454530ef40",  # Pranav Amin (primary)
 }
 # Calibrated against real questions/speaker bios in this deployment (see
 # the routing-feature migration history) — cosine similarity here mostly
@@ -735,6 +746,11 @@ def route_question(supabase: Client, question_id: str, question_text: str) -> Ro
     return RouteResult(status="unrouted", question_id=question_id, attempt_number=attempt_number)
 
 
+@app.get("/healthz")
+def healthz() -> dict[str, bool]:
+    return {"ok": True}
+
+
 @app.get("/api/feedback/topics", response_model=TopicsResponse)
 def get_topics() -> TopicsResponse:
     return fetch_latest_topics(get_supabase())
@@ -767,4 +783,4 @@ def route_question_endpoint(payload: RouteQuestionRequest) -> RouteResult:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8080)

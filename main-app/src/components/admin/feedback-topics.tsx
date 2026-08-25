@@ -51,7 +51,7 @@ export function sortTopics(topics: FeedbackTopic[]): FeedbackTopic[] {
 
 /**
  * BERTopic + BART topic clustering for supplier_feedback, proxied through
- * /api/feedback/topics/refresh to the local nlp-service (port 8001).
+ * /api/feedback/topics/refresh to the local nlp-service (port 8080).
  * Initial data comes from the server (page.tsx queries feedback_topics
  * directly, in the same request as everything else on the page) — this
  * component only re-fetches when Refresh re-runs the pipeline. Addressed

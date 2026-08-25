@@ -22,7 +22,7 @@ from supabase import create_client
 
 load_dotenv()
 
-NLP_URL = "http://localhost:8001"
+NLP_URL = "http://localhost:8080"
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]

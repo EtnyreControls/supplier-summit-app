@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-const NLP_SERVICE_URL = "http://localhost:8001";
+const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL ?? "http://localhost:8080";
 
 /**
  * Submits an attendee question straight into "questions". Runs as the

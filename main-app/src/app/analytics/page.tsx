@@ -3,7 +3,7 @@ import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import { createClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/components";
 import type { AddressableItem, FeedbackTopicsResponse, GrowthMachineBoardSummary, GrowthMachineTableProgress } from "@/components";
-import { AnalyticsPageClient } from "./analytics-page-client";
+import { AnalyticsPageClient, type AnalyticsPoll } from "./analytics-page-client";
 
 /**
  * Route: /analytics ("Analytics" in TopNav — only shown there for
@@ -46,6 +46,16 @@ type FeedbackTopicRow = {
   addressed_at: string | null;
   feedback_topic_items: { item_id: string; raw_text: string }[] | null;
 };
+
+type FeedbackRow = { feedback_id: string; status: string };
+type FeedbackQuestionRow = {
+  feedback_question_id: string;
+  feedback_id: string;
+  question_text: string;
+  question_type: "mcq" | "text" | "rating";
+  options: string | null;
+};
+type VoteCountRow = { feedback_question_id: string; answer_value: string; vote_count: number };
 
 type EventTableRow = { table_id: string; table_name: string | null };
 type TableMemberRow = { table_id: string; user_id: string; is_builder: boolean | null };
@@ -317,6 +327,44 @@ export default async function AnalyticsPage() {
       createdAt: b.created_at,
     }));
 
+  // Poll results — same source and get_feedback_vote_counts() RPC as the
+  // attendee-facing /polls page (see 20260821150000_poll_voting_rpc.sql for
+  // why an RPC is needed: RLS on feedback_answers only exposes each
+  // attendee's own rows, so a plain select can't show the group tally).
+  // Only mcq/rating questions in the 'poll' response_group render here —
+  // free-text feedback answers belong in the Feedback tab, not Poll results.
+  const [{ data: feedbackRows }, { data: feedbackQuestionRows }, { data: voteCounts }] = await Promise.all([
+    supabase.from("feedback").select("feedback_id, status").returns<FeedbackRow[]>(),
+    supabase
+      .from("feedback_questions")
+      .select("feedback_question_id, feedback_id, question_text, question_type, options")
+      .eq("response_group", "poll")
+      .returns<FeedbackQuestionRow[]>(),
+    supabase.rpc("get_feedback_vote_counts"),
+  ]);
+  const voteCountRows = (voteCounts ?? []) as VoteCountRow[];
+
+  const feedbackStatusById = new Map((feedbackRows ?? []).map((f) => [f.feedback_id, f.status]));
+  const votesByQuestion = new Map<string, Map<string, number>>();
+  for (const row of voteCountRows) {
+    const byAnswer = votesByQuestion.get(row.feedback_question_id) ?? new Map<string, number>();
+    byAnswer.set(row.answer_value, row.vote_count);
+    votesByQuestion.set(row.feedback_question_id, byAnswer);
+  }
+
+  const polls: AnalyticsPoll[] = (feedbackQuestionRows ?? [])
+    .filter((q) => q.question_type !== "text")
+    .map((q) => {
+      const optionLabels = (q.options ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+      const tally = votesByQuestion.get(q.feedback_question_id);
+      return {
+        id: q.feedback_question_id,
+        question: q.question_text,
+        live: feedbackStatusById.get(q.feedback_id) === "live",
+        options: optionLabels.map((label) => ({ id: label, label, votes: tally?.get(label) ?? 0 })),
+      };
+    });
+
   return (
     <AnalyticsPageClient
       initialQuestions={initialQuestions}
@@ -326,6 +374,7 @@ export default async function AnalyticsPage() {
       availableSpeakers={availableSpeakers}
       growthMachineTables={growthMachineTables}
       growthMachineBoards={growthMachineBoards}
+      polls={polls}
     />
   );
 }

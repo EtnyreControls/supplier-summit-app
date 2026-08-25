@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-const NLP_SERVICE_URL = "http://localhost:8001";
+const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL ?? "http://localhost:8080";
 
 /**
  * Writes a speaker's accept/decline on a routed question. Runs as the

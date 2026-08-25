@@ -57,9 +57,12 @@ import { getGrowthMachineBoardSnapshot } from "@/lib/supabase/get-growth-machine
  * built from the same in-memory state, so resolving items elsewhere updates
  * it live.
  *
- * Questions (question_groups) and Feedback (feedback_topics, one row per
- * clustering run) are both real data, fetched in page.tsx; Voting/Polls are
- * still mock — TODO: swap those for real queries too.
+ * Questions (question_groups), Feedback (feedback_topics, one row per
+ * clustering run), and Polls (feedback/feedback_questions, response_group
+ * 'poll' — same source as the attendee-facing /polls page) are all real
+ * data, fetched in page.tsx. Voting (VOTE_TOPICS/VOTE_SESSIONS below) is
+ * still mock — there's no real "vote on next year's topic" or badge-scan
+ * attendance feature backing it yet.
  *
  * Feedback used to be two stacked lists (a raw AddressableList plus a
  * FeedbackTopics browse view) rendering the same feedback_topics rows twice.
@@ -93,46 +96,12 @@ const VOTE_SESSIONS: VoteEntry[] = [
   { id: "s4", label: "Q&A with leadership", votes: 37 },
 ];
 
-interface AnalyticsPoll {
+export interface AnalyticsPoll {
   id: string;
   question: string;
   live: boolean;
   options: PollOption[];
 }
-
-const POLLS: AnalyticsPoll[] = [
-  {
-    id: "p1",
-    question: "Which topic should headline next year's keynote?",
-    live: true,
-    options: [
-      { id: "o1", label: "Supply chain resilience", votes: 61 },
-      { id: "o2", label: "AI-driven forecasting", votes: 54 },
-      { id: "o3", label: "Sustainability & ESG", votes: 22 },
-    ],
-  },
-  {
-    id: "p2",
-    question: "How would you rate today's breakout sessions?",
-    live: false,
-    options: [
-      { id: "o4", label: "Excellent", votes: 77 },
-      { id: "o5", label: "Good", votes: 45 },
-      { id: "o6", label: "Fair", votes: 11 },
-      { id: "o7", label: "Needs work", votes: 4 },
-    ],
-  },
-  {
-    id: "p3",
-    question: "Preferred cadence for supplier check-ins?",
-    live: false,
-    options: [
-      { id: "o8", label: "Monthly", votes: 58 },
-      { id: "o9", label: "Quarterly", votes: 66 },
-      { id: "o10", label: "As-needed", votes: 19 },
-    ],
-  },
-];
 
 function addressedRate(items: { addressed: boolean }[]) {
   if (items.length === 0) return 0;
@@ -147,6 +116,7 @@ export function AnalyticsPageClient({
   availableSpeakers,
   growthMachineTables,
   growthMachineBoards,
+  polls,
 }: {
   initialQuestions: AddressableItem[];
   initialFeedbackTopics: FeedbackTopicsResponse;
@@ -155,6 +125,7 @@ export function AnalyticsPageClient({
   availableSpeakers: AddressableSpeakerOption[];
   growthMachineTables: GrowthMachineTableProgress[];
   growthMachineBoards: GrowthMachineBoardSummary[];
+  polls: AnalyticsPoll[];
 }) {
   const router = useRouter();
   const { toast, showToast } = useToast();
@@ -500,11 +471,19 @@ export function AnalyticsPageClient({
             {section === "polls" && (
               <>
                 <SectionHeader eyebrow="Live & closed" title="Poll results" />
-                <div className="flex flex-col gap-4">
-                  {POLLS.map((poll) => (
-                    <PollCard key={poll.id} question={poll.question} options={poll.options} live={poll.live} showResults />
-                  ))}
-                </div>
+                {polls.length === 0 ? (
+                  <EmptyState
+                    icon={<PollRoundedIcon sx={{ fontSize: 32 }} />}
+                    title="No polls yet"
+                    body="Session poll results will show up here once attendees start voting."
+                  />
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {polls.map((poll) => (
+                      <PollCard key={poll.id} question={poll.question} options={poll.options} live={poll.live} showResults />
+                    ))}
+                  </div>
+                )}
               </>
             )}
 

@@ -16,7 +16,13 @@ import { AiTag } from "./ai-tag";
 
 /** Fixed short list for now — not enforced at the DB level, see the
  * question_anonymity_and_topic migration. */
-export const QUESTION_TOPICS = ["General", "Growth Journey", "Growth Machine"] as const;
+export const QUESTION_TOPICS = [
+  "General",
+  "Growth Journey",
+  "Growth Machine",
+  "Procurement",
+  "Strategic Sourcing",
+] as const;
 export type QuestionTopic = (typeof QUESTION_TOPICS)[number];
 
 export interface QuestionSubmission {

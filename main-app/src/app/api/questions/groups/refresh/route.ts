@@ -1,4 +1,4 @@
-const NLP_SERVICE_URL = "http://localhost:8001";
+const NLP_SERVICE_URL = process.env.NLP_SERVICE_URL ?? "http://localhost:8080";
 
 export async function POST() {
   try {
@@ -10,7 +10,7 @@ export async function POST() {
     return Response.json(data, { status: res.status });
   } catch {
     return Response.json(
-      { error: "nlp-service is unreachable at http://localhost:8001" },
+      { error: `nlp-service is unreachable at ${NLP_SERVICE_URL}` },
       { status: 502 },
     );
   }

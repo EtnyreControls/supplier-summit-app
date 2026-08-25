@@ -1,0 +1,9 @@
+.env
+*.log
+__pycache__/
+*.pyc
+.venv/
+venv/
+debug_topics.py
+seed_agenda.py
+seed_routing_test.py

@@ -77,6 +77,7 @@ export function TopNav({
   const [anchor, setAnchor] = React.useState<null | HTMLElement>(null);
   const [isAnalytics, setIsAnalytics] = React.useState(false);
   const [isSpeaker, setIsSpeaker] = React.useState(false);
+  const [hasSpeakerRow, setHasSpeakerRow] = React.useState(false);
 
   React.useEffect(() => {
     const supabase = createClient();
@@ -88,17 +89,35 @@ export function TopNav({
       const { data } = await supabase.from("user").select("role").eq("user_id", user.id).single();
       if (data?.role === "analytics") setIsAnalytics(true);
       if (data?.role === "speaker") setIsSpeaker(true);
+      // An analytics-role user can ALSO be a speaker at a session (see
+      // /speaker's role gate, which now accepts both roles) — only show the
+      // Speaker Inbox link for them if they actually have a speakers row,
+      // so analytics-only staff don't get a link to a permanently empty inbox.
+      if (data?.role === "analytics") {
+        const { count } = await supabase
+          .from("speakers")
+          .select("speaker_id", { count: "exact", head: true })
+          .eq("user_id", user.id);
+        setHasSpeakerRow(!!count);
+      }
     })();
   }, []);
 
   // Analytics/speaker-role users are staff, not attendees — "My questions"
   // (their own submitted Q&A) doesn't apply to them, so it's swapped out for
   // their respective staff section instead of just appending onto the
-  // attendee nav.
-  const navItems = isAnalytics
-    ? [...NAV_ITEMS.filter((item) => item.key !== "questions"), ANALYTICS_NAV_ITEM]
+  // attendee nav. An analytics user who's also speaking gets both staff
+  // links rather than one replacing the other.
+  const staffNavItems = isAnalytics
+    ? hasSpeakerRow
+      ? [ANALYTICS_NAV_ITEM, SPEAKER_NAV_ITEM]
+      : [ANALYTICS_NAV_ITEM]
     : isSpeaker
-      ? [...NAV_ITEMS.filter((item) => item.key !== "questions"), SPEAKER_NAV_ITEM]
+      ? [SPEAKER_NAV_ITEM]
+      : [];
+  const navItems =
+    isAnalytics || isSpeaker
+      ? [...NAV_ITEMS.filter((item) => item.key !== "questions"), ...staffNavItems]
       : NAV_ITEMS;
 
   return (
