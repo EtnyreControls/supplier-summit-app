@@ -51,14 +51,14 @@ export async function unlockUser(id: string) {
   return result;
 }
 
-// Puts an account back to the shared placeholder PIN (same value the bulk
-// reset in 20260821180000_force_pin_change.sql used) and re-flags
-// must_change_pin so proxy.ts forces them through /change-pin again on
-// their next login — also clears any lockout, since a forgotten PIN is
-// exactly what runs someone into 3 failed attempts in the first place.
+// Puts an account back to the shared placeholder PIN (matches the bulk
+// reset run this session — see test.md) and re-flags must_change_pin so
+// proxy.ts forces them through /change-pin again on their next login — also
+// clears any lockout, since a forgotten PIN is exactly what runs someone
+// into 3 failed attempts in the first place.
 export async function resetUserPin(id: string) {
   const result = await crudUpdate("user", "user_id", id, {
-    pin: "EtnyreSummit2026",
+    pin: "EtnyreSummit2026!",
     must_change_pin: true,
     locked_at: null,
     failed_login_attempts: 0,

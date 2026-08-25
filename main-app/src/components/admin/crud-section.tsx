@@ -27,7 +27,7 @@ export function CrudSection<T extends Record<string, unknown>>({
   setRows: React.Dispatch<React.SetStateAction<T[]>>;
   columns: DataTableColumn<T & { id: string }>[];
   fields: EntityField[];
-  onCreate?: (values: Partial<T>) => Promise<{ error: string | null }>;
+  onCreate?: (values: Partial<T>) => Promise<{ data?: Record<string, unknown> | null; error: string | null }>;
   onUpdate: (id: string, values: Partial<T>) => Promise<{ error: string | null }>;
   onDelete: (id: string) => Promise<{ error: string | null }>;
   allowCreate?: boolean;
@@ -41,11 +41,23 @@ export function CrudSection<T extends Record<string, unknown>>({
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     setSubmitting(true);
-    const result = editing
-      ? await onUpdate(String(editing[idKey]), values as Partial<T>)
-      : onCreate
-        ? await onCreate(values as Partial<T>)
-        : { error: "Create isn't supported for this entity" };
+    let result: { data?: Record<string, unknown> | null; error: string | null };
+    try {
+      result = editing
+        ? await onUpdate(String(editing[idKey]), values as Partial<T>)
+        : onCreate
+          ? await onCreate(values as Partial<T>)
+          : { error: "Create isn't supported for this entity" };
+    } catch {
+      // A rejected/thrown action (e.g. a stale Server Action ID after a
+      // rebuild — see Next's server-actions docs) used to leave
+      // `submitting` stuck true forever with no feedback, reading as the
+      // dialog silently "buffering." Surface it and let the button reset
+      // instead of hanging.
+      setSubmitting(false);
+      showToast("Save failed — please refresh the page and try again.", "error");
+      return;
+    }
     setSubmitting(false);
     if (result.error) {
       showToast(result.error, "error");
@@ -54,7 +66,11 @@ export function CrudSection<T extends Record<string, unknown>>({
     if (editing) {
       setRows((prev) => prev.map((r) => (r[idKey] === editing[idKey] ? { ...r, ...values } : r)));
     } else {
-      setRows((prev) => [...prev, { ...values, [idKey]: crypto.randomUUID() } as T]);
+      // Prefer the real inserted row crudCreate now selects back; only fall
+      // back to a client-guessed id in the (unexpected) case a create action
+      // returns success with no row — better than crashing on a missing key.
+      const created = (result.data as T | undefined) ?? ({ ...values, [idKey]: crypto.randomUUID() } as T);
+      setRows((prev) => [...prev, created]);
     }
     setDialogOpen(false);
     setEditing(null);

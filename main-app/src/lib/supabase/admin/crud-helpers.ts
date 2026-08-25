@@ -34,11 +34,21 @@ export async function crudListSelect<T>(
   return { data: (data ?? []) as T[], error: error?.message ?? null };
 }
 
-export async function crudCreate(table: string, values: Record<string, unknown>): Promise<{ error: string | null }> {
+export async function crudCreate(
+  table: string,
+  values: Record<string, unknown>,
+): Promise<{ data: Record<string, unknown> | null; error: string | null }> {
   await requireAdmin();
   const admin = createAdminClient();
-  const { error } = await admin.from(table).insert(values);
-  return { error: error?.message ?? null };
+  // Selects the inserted row back rather than trusting the caller's
+  // `values` — the DB fills in defaulted/generated columns (the primary
+  // key among them), and the client previously had no way to know the real
+  // id, so it faked one with crypto.randomUUID() for the optimistic UI
+  // update. That fake id didn't match any real row, so editing/deleting the
+  // just-created row (without a page refresh first) silently operated on a
+  // nonexistent id.
+  const { data, error } = await admin.from(table).insert(values).select().single();
+  return { data: data ?? null, error: error?.message ?? null };
 }
 
 export async function crudUpdate(
