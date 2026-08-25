@@ -3,7 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
 import ThemeRegistry from "@/theme/ThemeRegistry";
-import { GlobalQuestionFab, GeneralCountdownBanner } from "@/components";
+import { GlobalQuestionFab, GeneralCountdownBanner, MustChangePinGate } from "@/components";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <GeneralCountdownBanner />
           {children}
           <GlobalQuestionFab />
+          <MustChangePinGate />
         </ThemeRegistry>
       </body>
     </html>

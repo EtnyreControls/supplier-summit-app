@@ -12,9 +12,12 @@ import { updateSession } from "@/lib/supabase/middleware";
  *
  * Signed-in accounts with user.must_change_pin still set (forced by the
  * bulk PIN reset in 20260821180000_force_pin_change.sql, or true by default
- * for any new account) get redirected to /change-pin instead of whatever
- * they asked for, until they set their own PIN — same "any problem lands
- * somewhere safe" reasoning as the signed-out case below.
+ * for any new account) are no longer redirected away from whatever page
+ * they asked for — that redirect, chained with the change-pin form's own
+ * post-submit navigation, is what caused the multi-minute "Saving…" hangs
+ * various sessions kept hitting. Instead they reach their page normally and
+ * a non-dismissable dialog (MustChangePinGate, in the root layout) sits on
+ * top of it until they follow it to /change-pin and back.
  *
  * Public: /login (PIN entry) and /qr (badge scans must work signed-out —
  * that's how people log in; its server action decides login vs. contact
@@ -23,18 +26,15 @@ import { updateSession } from "@/lib/supabase/middleware";
  * same reasoning applies to skipping the must-change-pin redirect for them.
  */
 const PUBLIC_PATHS = ["/login", "/qr"];
-const CHANGE_PIN_PATH = "/change-pin";
 
 // Every response this proxy returns gets this header — without it, a
 // browser's back/forward cache (bfcache) can restore a page exactly as it
 // looked *before* a redirect fired here, entirely client-side, with no
-// network request and so no re-run of this gate. Concretely: an account
-// with must_change_pin still true gets redirected /welcome -> /change-pin;
-// if they hit the browser Back button afterward, bfcache can hand them the
-// already-rendered /welcome straight back — still logged in on their
-// original (temp-password) session, PIN never actually changed, gate never
-// re-checked. `no-store` tells the browser not to bfcache the page at all,
-// so Back forces a real navigation through this proxy again instead.
+// network request and so no re-run of this gate. Concretely: signing out
+// and hitting Back could otherwise hand back an already-rendered
+// signed-in page straight from bfcache with no re-check. `no-store` tells
+// the browser not to bfcache the page at all, so Back forces a real
+// navigation through this proxy again instead.
 function withNoStore(response: NextResponse) {
   response.headers.set("Cache-Control", "no-store");
   return response;
@@ -52,15 +52,8 @@ export default async function proxy(request: NextRequest) {
     return withNoStore(NextResponse.redirect(url));
   };
 
-  const toChangePin = () => {
-    const url = request.nextUrl.clone();
-    url.pathname = CHANGE_PIN_PATH;
-    url.search = "";
-    return withNoStore(NextResponse.redirect(url));
-  };
-
   try {
-    const { response, user, supabase } = await updateSession(request);
+    const { response, user } = await updateSession(request);
 
     if (!user) {
       if (isPublic) return withNoStore(response);
@@ -68,15 +61,6 @@ export default async function proxy(request: NextRequest) {
         return withNoStore(NextResponse.json({ error: "Not signed in" }, { status: 401 }));
       }
       return toLogin();
-    }
-
-    if (!isApi && pathname !== CHANGE_PIN_PATH) {
-      const { data } = await supabase
-        .from("user")
-        .select("must_change_pin")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (data?.must_change_pin) return toChangePin();
     }
 
     return withNoStore(response);

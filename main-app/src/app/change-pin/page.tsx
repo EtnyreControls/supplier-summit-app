@@ -15,10 +15,11 @@ import { PIN_REQUIREMENTS } from "@/lib/pin-requirements";
 
 /**
  * Route: /change-pin
- * Forced by proxy.ts for any signed-in account with user.must_change_pin
- * still true (the bulk PIN reset in 20260821180000_force_pin_change.sql,
- * or any new account going forward) — no other page is reachable until a
- * new PIN is set here.
+ * Reached via the "Change PIN" button on MustChangePinGate's dialog, shown
+ * on every page for any signed-in account with user.must_change_pin still
+ * true (the bulk PIN reset in 20260821180000_force_pin_change.sql, or any
+ * new account going forward). Not forced by proxy.ts anymore — see
+ * proxy.ts's header comment for why.
  */
 export default function ChangePinPage() {
   const router = useRouter();
@@ -42,13 +43,24 @@ export default function ChangePinPage() {
       return;
     }
     setSubmitting(true);
-    const { error } = await changeOwnPin(pin);
+    let error: string | null;
+    try {
+      ({ error } = await changeOwnPin(pin));
+    } catch {
+      // A rejected/hung Server Action call (e.g. a stale action ID from a
+      // client bundle loaded just before a redeploy — see crud-section.tsx)
+      // used to leave `submitting` stuck true forever with the "Saving…"
+      // loader and no way out except a hard refresh. Surface it instead.
+      setSubmitting(false);
+      showToast("Save failed — please refresh the page and try again.", "error");
+      return;
+    }
     if (error) {
       setSubmitting(false);
       showToast(error, "error");
       return;
     }
-    router.push("/welcome");
+    router.push("/");
   };
 
   return (
