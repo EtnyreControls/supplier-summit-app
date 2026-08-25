@@ -28,6 +28,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/links" className="hover:text-ink">
               Links
             </Link>
+            <Link href="/analytics" className="hover:text-ink">
+              Analytics
+            </Link>
           </nav>
         </div>
         {/* The only way back out — the admin area otherwise has no shared

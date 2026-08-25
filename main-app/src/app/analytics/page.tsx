@@ -6,11 +6,15 @@ import type { AddressableItem, FeedbackTopicsResponse, GrowthMachineBoardSummary
 import { AnalyticsPageClient, type AnalyticsPoll } from "./analytics-page-client";
 
 /**
- * Route: /analytics ("Analytics" in TopNav — only shown there for
- * role="analytics" users, see top-nav.tsx). Server Component: the actual
- * access control lives here, not in the nav — hiding the link doesn't stop
- * someone hitting the URL directly, so this checks the real DB role
- * (replacing the old demo PIN gate) before rendering anything.
+ * Route: /analytics ("Analytics" in TopNav for role="analytics" users, see
+ * top-nav.tsx; admin reaches it via the admin console's own nav instead,
+ * see admin/(protected)/layout.tsx). Server Component: the actual access
+ * control lives here, not in the nav — hiding the link doesn't stop someone
+ * hitting the URL directly, so this checks the real DB role (replacing the
+ * old demo PIN gate) before rendering anything. Also lets role="admin" in:
+ * every table this page reads is now covered by either an
+ * `is_admin()`-gated RLS policy or an open "authenticated" one (see
+ * 20260825130000_admin_analytics_access.sql for the ones that weren't).
  */
 
 type RoutingAttemptRow = {
@@ -79,13 +83,13 @@ export default async function AnalyticsPage() {
     ? await supabase.from("user").select("role").eq("user_id", authUser.id).single()
     : { data: null };
 
-  if (profile?.role !== "analytics") {
+  if (profile?.role !== "analytics" && profile?.role !== "admin") {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center px-5 text-center">
         <EmptyState
           icon={<LockRoundedIcon sx={{ fontSize: 32 }} />}
           title="Analytics access only"
-          body="This area is restricted to the analytics role."
+          body="This area is restricted to the analytics and admin roles."
           action={
             <Link href="/" className="text-sm font-semibold text-ink underline underline-offset-2">
               Back home

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -81,24 +82,30 @@ ANALYTICS_SPEAKER_ID = "00000000-0000-0000-0000-00000000a17c"
 # (Supply Chain Responsibilities.xlsx): Procurement Operations (POs,
 # expediting, delivery issues, shortages, buying cadence) is Shannon's;
 # Strategic Sourcing & Category Management (category strategy, negotiations,
-# contracts, supplier development) is Zoey/Pranav's. Only one speaker_id per
-# tag is supported here, so Pranav is the auto-routed primary for Strategic
-# Sourcing — Zoey is reachable via the analytics Reassign dropdown, same as
-# any other declined/manual case.
-TAG_SPEAKER_IDS = {
-    "general": ANALYTICS_SPEAKER_ID,
-    "growth machine": ANALYTICS_SPEAKER_ID,
+# contracts, supplier development) is Zoey/Pranav's.
+#
+# Each tag maps to an ordered tuple of speaker_ids, tried in order (a tag
+# with a single co-owner just gets a one-element tuple) before falling
+# through to Analytics — same "declined -> next in chain" mechanics as the
+# existing tag-then-Analytics chain, just with more than one named speaker
+# now possible per tag. Strategic Sourcing tries Pranav first, then Zoey.
+TAG_SPEAKER_IDS: dict[str, tuple[str, ...]] = {
+    "general": (ANALYTICS_SPEAKER_ID,),
+    "growth machine": (ANALYTICS_SPEAKER_ID,),
     # No per-unit tags yet (Etnyre/BearCat/SMF/Hendrick each need their own
     # speaker, pending a stakeholder decision) — routes to Analytics, who
     # can manually reassign to the right unit's speaker via the existing
     # Reassign dropdown.
-    "walk gallery": ANALYTICS_SPEAKER_ID,
-    "supplier connection challenge": "60157b0c-c694-4f19-b1d7-c51732762ab8",
-    "summit objectives": "31be750c-fd1c-494a-9bdb-816cd7f59cb1",
-    "executive growth strategy": "f774ab2c-2ac9-4125-b1b4-cc89076ea4ba",
-    "global growth": "e759a745-73c1-45db-824e-c0ac0e5dc215",
-    "procurement": "734b81a2-61ac-4b55-ab45-444654c13bd0",  # Shannon Mulcahy
-    "strategic sourcing": "b3672f78-1e35-4cc3-b7d7-38454530ef40",  # Pranav Amin (primary)
+    "walk gallery": (ANALYTICS_SPEAKER_ID,),
+    "supplier connection challenge": ("60157b0c-c694-4f19-b1d7-c51732762ab8",),
+    "summit objectives": ("31be750c-fd1c-494a-9bdb-816cd7f59cb1",),
+    "executive growth strategy": ("f774ab2c-2ac9-4125-b1b4-cc89076ea4ba",),
+    "global growth": ("e759a745-73c1-45db-824e-c0ac0e5dc215",),
+    "procurement": ("734b81a2-61ac-4b55-ab45-444654c13bd0",),  # Shannon Mulcahy
+    "strategic sourcing": (
+        "b3672f78-1e35-4cc3-b7d7-38454530ef40",  # Pranav Amin (primary)
+        "188962ef-b51f-46f4-b655-a81cd5761182",  # Zoey Henchliffe (backup if Pranav declines)
+    ),
 }
 # Calibrated against real questions/speaker bios in this deployment (see
 # the routing-feature migration history) — cosine similarity here mostly
@@ -155,12 +162,29 @@ class RouteResult(BaseModel):
     attempt_number: Optional[int] = None
 
 
+_supabase_local = threading.local()
+
+
 def get_supabase() -> Optional[Client]:
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_KEY")
-    if not url or not key:
-        return None
-    return create_client(url, key)
+    # One client per worker thread, not one global shared client and not a
+    # fresh one per call. FastAPI runs these sync `def` endpoints in a
+    # threadpool, and a single supabase Client wraps one httpx connection
+    # pool underneath — sharing that pool across threads under concurrent
+    # load caused intermittent httpx.RemoteProtocolError ("Server
+    # disconnected") failures (confirmed via a routing load test: ~23-31%
+    # failure rate under concurrency=5-20). A fresh client per call avoided
+    # that but paid a full TCP+TLS handshake every request instead (~7s p50
+    # vs ~350ms cached). Thread-local gives each worker its own pool,
+    # reused across that thread's requests, with no cross-thread contention.
+    client = getattr(_supabase_local, "client", None)
+    if client is None:
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_KEY")
+        if not url or not key:
+            return None
+        client = create_client(url, key)
+        _supabase_local.client = client
+    return client
 
 
 def get_embedding_model():
@@ -694,10 +718,7 @@ def route_question(supabase: Client, question_id: str, question_text: str) -> Ro
     topic = (question_resp.data or {}).get("topic") if question_resp and question_resp.data else None
     tag_key = (topic or "").strip().lower() or "general"
 
-    chain = []
-    mapped_speaker_id = TAG_SPEAKER_IDS.get(tag_key)
-    if mapped_speaker_id:
-        chain.append(mapped_speaker_id)
+    chain = list(TAG_SPEAKER_IDS.get(tag_key, ()))
     if ANALYTICS_SPEAKER_ID not in chain:
         chain.append(ANALYTICS_SPEAKER_ID)
     next_speaker_id = next((s for s in chain if s not in attempted), None)
