@@ -1,0 +1,9 @@
+# dependencies
+node_modules/
+
+# editor/OS lock and temp files
+~$*
+*.tmp
+
+# env files (can opt-in for committing if needed)
+.env*

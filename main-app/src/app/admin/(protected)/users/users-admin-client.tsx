@@ -22,7 +22,7 @@ function ResetPinButton({ userId, onReset }: { userId: string; onReset: () => vo
   const [busy, setBusy] = React.useState(false);
 
   const handleClick = async () => {
-    if (!window.confirm("Reset this account's PIN to EtnyreSummit2026? They'll be required to set a new one on next login.")) {
+    if (!window.confirm("Reset this account's PIN to EtnyreSummit2026!? They'll be required to set a new one on next login.")) {
       return;
     }
     setBusy(true);
@@ -102,7 +102,7 @@ function LockedAccounts({
       <h2 className="text-sm font-semibold text-ink">Locked accounts</h2>
       <p className="mt-1 text-sm text-grey-600">
         Locked after 3 failed PIN attempts — Unlock clears the lock without changing their PIN; Reset PIN also
-        puts them back on EtnyreSummit2026 for when they&apos;ve forgotten it entirely.
+        puts them back on EtnyreSummit2026! for when they&apos;ve forgotten it entirely.
       </p>
       <div className="mt-3">
         {locked.length === 0 ? (

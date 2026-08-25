@@ -27,7 +27,7 @@ export type QuestionTopic = (typeof QUESTION_TOPICS)[number];
 
 export interface QuestionSubmission {
   question: string;
-  topic: QuestionTopic;
+  topic?: QuestionTopic;
   isAnonymous: boolean;
 }
 
@@ -47,14 +47,14 @@ export function QuestionFab({
 }) {
   const [open, setOpen] = React.useState(false);
   const [text, setText] = React.useState("");
-  const [topic, setTopic] = React.useState<QuestionTopic>("General");
+  const [topic, setTopic] = React.useState<QuestionTopic | "">("");
   const [isAnonymous, setIsAnonymous] = React.useState(false);
   const [sending, setSending] = React.useState(false);
 
   const close = () => {
     setOpen(false);
     setText("");
-    setTopic("General");
+    setTopic("");
     setIsAnonymous(false);
   };
 
@@ -63,7 +63,7 @@ export function QuestionFab({
     if (!q) return;
     setSending(true);
     try {
-      await onSubmit({ question: q, topic, isAnonymous });
+      await onSubmit({ question: q, topic: topic || undefined, isAnonymous });
       close();
     } finally {
       setSending(false);
@@ -104,7 +104,7 @@ export function QuestionFab({
                 size="small"
                 label="Tag"
                 value={topic}
-                onChange={(e) => setTopic(e.target.value as QuestionTopic)}
+                onChange={(e) => setTopic(e.target.value as QuestionTopic | "")}
                 sx={{
                   mt: 2,
                   minWidth: 160,
@@ -113,6 +113,9 @@ export function QuestionFab({
                 }}
                 slotProps={{ select: { MenuProps: { disablePortal: true } } }}
               >
+                <MenuItem value="" sx={{ fontSize: 13 }}>
+                  No tag
+                </MenuItem>
                 {QUESTION_TOPICS.map((t) => (
                   <MenuItem key={t} value={t} sx={{ fontSize: 13 }}>
                     {t}

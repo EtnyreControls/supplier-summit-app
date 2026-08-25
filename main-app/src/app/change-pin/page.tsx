@@ -49,7 +49,6 @@ export default function ChangePinPage() {
       return;
     }
     router.push("/welcome");
-    router.refresh();
   };
 
   return (

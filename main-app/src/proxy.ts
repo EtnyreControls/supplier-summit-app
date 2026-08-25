@@ -25,6 +25,21 @@ import { updateSession } from "@/lib/supabase/middleware";
 const PUBLIC_PATHS = ["/login", "/qr"];
 const CHANGE_PIN_PATH = "/change-pin";
 
+// Every response this proxy returns gets this header — without it, a
+// browser's back/forward cache (bfcache) can restore a page exactly as it
+// looked *before* a redirect fired here, entirely client-side, with no
+// network request and so no re-run of this gate. Concretely: an account
+// with must_change_pin still true gets redirected /welcome -> /change-pin;
+// if they hit the browser Back button afterward, bfcache can hand them the
+// already-rendered /welcome straight back — still logged in on their
+// original (temp-password) session, PIN never actually changed, gate never
+// re-checked. `no-store` tells the browser not to bfcache the page at all,
+// so Back forces a real navigation through this proxy again instead.
+function withNoStore(response: NextResponse) {
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -34,23 +49,23 @@ export default async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    return NextResponse.redirect(url);
+    return withNoStore(NextResponse.redirect(url));
   };
 
   const toChangePin = () => {
     const url = request.nextUrl.clone();
     url.pathname = CHANGE_PIN_PATH;
     url.search = "";
-    return NextResponse.redirect(url);
+    return withNoStore(NextResponse.redirect(url));
   };
 
   try {
     const { response, user, supabase } = await updateSession(request);
 
     if (!user) {
-      if (isPublic) return response;
+      if (isPublic) return withNoStore(response);
       if (isApi) {
-        return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+        return withNoStore(NextResponse.json({ error: "Not signed in" }, { status: 401 }));
       }
       return toLogin();
     }
@@ -64,11 +79,11 @@ export default async function proxy(request: NextRequest) {
       if (data?.must_change_pin) return toChangePin();
     }
 
-    return response;
+    return withNoStore(response);
   } catch {
-    if (isPublic) return NextResponse.next({ request });
+    if (isPublic) return withNoStore(NextResponse.next({ request }));
     if (isApi) {
-      return NextResponse.json({ error: "Auth check failed" }, { status: 401 });
+      return withNoStore(NextResponse.json({ error: "Auth check failed" }, { status: 401 }));
     }
     return toLogin();
   }
