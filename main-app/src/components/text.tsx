@@ -661,6 +661,16 @@ function SpectatorPromptNav({ editor }: { editor: Editor }) {
   const [index, setIndex] = React.useState(0);
 
   React.useEffect(() => {
+    // Page ids never change once the Builder has created them — this only
+    // ever needs to fire once. Previously it called setPageIds with a
+    // brand-new array on every single store event, forever (the listener
+    // was never scoped and never stopped): that fed back into the
+    // pageIds-dependent effect below (setCurrentPage + zoomToBounds, both
+    // store writes), which retriggered this listener, in a tight
+    // synchronous loop — tldraw's own reaction-depth guard eventually
+    // threw "Reaction update depth limit exceeded" from it. Stopping the
+    // listener as soon as the pages are found (and never calling
+    // setPageIds again after that) breaks the loop at the source.
     const checkPages = () => {
       const pages = editor.getPages();
       if (pages.length < PROMPT_COUNT) return false;
@@ -669,7 +679,7 @@ function SpectatorPromptNav({ editor }: { editor: Editor }) {
     };
     if (checkPages()) return;
     const unlisten = editor.store.listen(() => {
-      checkPages();
+      if (checkPages()) unlisten();
     });
     return unlisten;
   }, [editor]);
@@ -1025,7 +1035,12 @@ function SyncedGrowthMachineCanvas({
   // rather than uploaded. Fine for this board's actual usage (drawings and
   // locked heading shapes), not recommended if large media becomes common.
   const store = useSync({
-    uri: `${syncServerUrl}/api/connect/${roomId}`,
+    // TldrawDurableObject.handleConnect reads this to report an accurate
+    // isReadonly to tldraw's own sync-core — without it every peer
+    // connects with write access, which is what previously forced
+    // GrowthMachineCanvas to fight the sync layer's own reactor
+    // client-side (see its onMount handler's history, now simplified).
+    uri: `${syncServerUrl}/api/connect/${roomId}?readOnly=${readOnly}`,
     assets: inlineBase64AssetStore,
     users,
     // Tags every presence record with its role so FollowBuilderToggle can
@@ -1123,15 +1138,31 @@ function GrowthMachineCanvas({
             // access". Re-assert both the read-only flag and the
             // laser-only tool lock on every instance-state change so our
             // intent always wins, no matter what the sync layer does.
+            // Re-entrancy guard: updateInstanceState/setCurrentTool below
+            // are themselves 'instance'-scope changes, so without this the
+            // handler re-triggers itself on its own corrective writes —
+            // and if the sync layer's reactor (see comment above) reacts
+            // to those in turn, neither side has a way to recognize "this
+            // is a write I already caused" and stop, so the two can ping-
+            // pong synchronously until tldraw's own reaction-depth guard
+            // throws "Reaction update depth limit exceeded". Confirmed via
+            // an actual crash from this exact path (onMount -> Editor.run
+            // -> HistoryManager.batch) before this guard was added.
+            let applyingReadonlyFix = false;
             ed.sideEffects.registerAfterChangeHandler('instance', (_prev, next) => {
-              if (!next.isReadonly) {
-                ed.updateInstanceState({ isReadonly: true });
-              }
+              if (applyingReadonlyFix) return;
+              const needsReadonlyFix = !next.isReadonly;
               // Laser is the only tool a Spectator may hold — tldraw
               // reverts to `select` after each laser stroke (and keyboard
               // shortcuts still work under hideUi), so pin it back.
-              if (ed.getCurrentToolId() !== 'laser') {
-                ed.setCurrentTool('laser');
+              const needsToolFix = ed.getCurrentToolId() !== 'laser';
+              if (!needsReadonlyFix && !needsToolFix) return;
+              applyingReadonlyFix = true;
+              try {
+                if (needsReadonlyFix) ed.updateInstanceState({ isReadonly: true });
+                if (needsToolFix) ed.setCurrentTool('laser');
+              } finally {
+                applyingReadonlyFix = false;
               }
             });
           }
