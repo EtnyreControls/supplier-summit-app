@@ -7,7 +7,9 @@ import DialogActions from "@mui/material/DialogActions";
 import Avatar from "@mui/material/Avatar";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
+import TextField from "@mui/material/TextField";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import { ContactShareList, type ShareField } from "./qr";
 import { createClient } from "@/lib/supabase/client";
@@ -19,6 +21,10 @@ type Profile = {
   isAdmin: boolean;
   tableNumber: string | null;
 };
+
+type ContactValues = { email: string; phone: string; company: string };
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type MembershipRow = { event_tables: { table_name: string | null } | null };
 
@@ -50,6 +56,14 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const [fields, setFields] = React.useState<ShareField[]>([]);
   const [status, setStatus] = React.useState<"idle" | "loading" | "error">("idle");
+  const [editing, setEditing] = React.useState(false);
+  const [editValues, setEditValues] = React.useState<ContactValues>({ email: "", phone: "", company: "" });
+  const [editError, setEditError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) setEditing(false);
+  }, [open]);
 
   React.useEffect(() => {
     if (!open || profile) return;
@@ -115,6 +129,50 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
     }
   };
 
+  const rawValue = (id: string) => {
+    const value = fields.find((f) => f.id === id)?.value ?? "";
+    return value === "Not set" ? "" : value;
+  };
+
+  const handleStartEdit = () => {
+    setEditValues({ email: rawValue("email"), phone: rawValue("phone"), company: rawValue("company") });
+    setEditError(null);
+    setEditing(true);
+  };
+
+  const handleSaveContact = async () => {
+    if (!userId) return;
+    const email = editValues.email.trim();
+    const phone = editValues.phone.trim();
+    const company = editValues.company.trim();
+    if (email && !EMAIL_PATTERN.test(email)) {
+      setEditError("Enter a valid email address.");
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("user")
+      .update({ email: email || null, phone: phone || null, company: company || null })
+      .eq("user_id", userId);
+    setSaving(false);
+    if (error) {
+      setEditError("Couldn't save your changes. Please try again.");
+      return;
+    }
+    setFields((fs) =>
+      fs.map((f) => {
+        if (f.id === "email") return { ...f, value: email || "Not set" };
+        if (f.id === "phone") return { ...f, value: phone || "Not set" };
+        if (f.id === "company") return { ...f, value: company || "Not set" };
+        return f;
+      }),
+    );
+    setProfile((p) => (p ? { ...p, company: company || null } : p));
+    setEditing(false);
+  };
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle className="flex items-center justify-between gap-2">
@@ -142,7 +200,57 @@ export function ProfileModal({ open, onClose }: { open: boolean; onClose: () => 
                 )}
               </div>
             </div>
-            <ContactShareList fields={fields} onToggle={handleToggle} />
+            {editing ? (
+              <div className="flex flex-col gap-3">
+                <TextField
+                  label="Email"
+                  type="email"
+                  value={editValues.email}
+                  onChange={(e) => setEditValues((v) => ({ ...v, email: e.target.value }))}
+                  size="small"
+                  fullWidth
+                  autoComplete="email"
+                />
+                <TextField
+                  label="Phone"
+                  type="tel"
+                  value={editValues.phone}
+                  onChange={(e) => setEditValues((v) => ({ ...v, phone: e.target.value }))}
+                  size="small"
+                  fullWidth
+                  autoComplete="tel"
+                />
+                <TextField
+                  label="Company"
+                  value={editValues.company}
+                  onChange={(e) => setEditValues((v) => ({ ...v, company: e.target.value }))}
+                  size="small"
+                  fullWidth
+                  autoComplete="organization"
+                />
+                {editError && <p className="text-xs text-red-600">{editError}</p>}
+                <div className="flex gap-2">
+                  <Button variant="contained" onClick={handleSaveContact} disabled={saving} fullWidth>
+                    {saving ? "Saving…" : "Save"}
+                  </Button>
+                  <Button onClick={() => setEditing(false)} disabled={saving} fullWidth>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <ContactShareList fields={fields} onToggle={handleToggle} />
+                <Button
+                  onClick={handleStartEdit}
+                  startIcon={<EditRoundedIcon fontSize="small" />}
+                  size="small"
+                  color="secondary"
+                >
+                  Edit contact info
+                </Button>
+              </>
+            )}
             {profile.isAdmin && (
               // Deliberately the one link from the attendee app into
               // /admin — gated by role and shown only to the signed-in

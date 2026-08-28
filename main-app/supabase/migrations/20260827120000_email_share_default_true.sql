@@ -1,0 +1,14 @@
+-- Email sharing should default to on for new accounts — attendees expect
+-- their email to be visible to other attendees they exchange contacts with
+-- unless they opt out, whereas phone/company stay opt-in (share_phone,
+-- share_company keep their existing default false).
+--
+-- Only changes the column default, which applies to rows inserted from now
+-- on (new sign-ups, and any future bulk resets that insert fresh rows).
+-- Deliberately not touching share_email on existing rows — some attendees
+-- may have already explicitly turned it off in the profile modal, and
+-- there's no way to distinguish that from "never touched" the way the
+-- original 20260721200000_contact_share_prefs.sql backfill could (it ran
+-- once, immediately after adding the column, when every row was
+-- unambiguously untouched).
+alter table public."user" alter column share_email set default true;

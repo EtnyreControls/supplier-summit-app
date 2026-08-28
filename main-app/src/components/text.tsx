@@ -1054,6 +1054,32 @@ function GrowthMachineCanvas({
           // rather than Select, since that's the primary way of adding
           // ideas to the board.
           ed.setCurrentTool(readOnly ? 'laser' : 'note');
+
+          if (readOnly) {
+            // `useSync` fights us here: it hands the editor a
+            // `collaboration.mode` signal that the server drives via
+            // onAfterConnect (our sync-server reports every peer as
+            // read/write), and the editor has an internal reactor that
+            // force-writes `instanceState.isReadonly` from that signal on
+            // every connect/reconnect. So the `updateInstanceState` above
+            // gets silently flipped back to editable moments after mount —
+            // which is how a Spectator "double-clicks and gains edit
+            // access". Re-assert both the read-only flag and the
+            // laser-only tool lock on every instance-state change so our
+            // intent always wins, no matter what the sync layer does.
+            ed.sideEffects.registerAfterChangeHandler('instance', (_prev, next) => {
+              if (!next.isReadonly) {
+                ed.updateInstanceState({ isReadonly: true });
+              }
+              // Laser is the only tool a Spectator may hold — tldraw
+              // reverts to `select` after each laser stroke (and keyboard
+              // shortcuts still work under hideUi), so pin it back.
+              if (ed.getCurrentToolId() !== 'laser') {
+                ed.setCurrentTool('laser');
+              }
+            });
+          }
+
           setEditor(ed);
         }}
       />

@@ -56,11 +56,20 @@ export default function Home() {
       <PageContainer>
         <SummitSummary
           name={firstName}
+          // Sourced from Etnyre_Supplier_Summit_Attendee_Register Final.xlsx
+          // (Attendees/Suppliers Attending summary cells on the "Supplier
+          // Register" sheet — 77 external attendees, 42 unique supplier
+          // companies) and the "Etnyre Members " sheet's ROLE column (5
+          // rows tagged Speaker/"Analytics, Speaker"). Sessions instead
+          // comes from the live "event" table (13 rows) rather than the
+          // spreadsheet, which has no session data. Exhibitors swapped for
+          // Suppliers per request — this event doesn't have exhibitors,
+          // just supplier companies attending.
           stats={[
-            { label: "Attendees", value: "480" },
-            { label: "Speakers", value: "24" },
-            { label: "Sessions", value: "36" },
-            { label: "Exhibitors", value: "18" },
+            { label: "Attendees", value: "77" },
+            { label: "Speakers", value: "5" },
+            { label: "Sessions", value: "13" },
+            { label: "Suppliers", value: "42" },
           ]}
         />
         <SectionHeader eyebrow="About Us" title="Our Brand" />
