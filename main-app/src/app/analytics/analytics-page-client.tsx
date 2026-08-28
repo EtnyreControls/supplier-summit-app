@@ -550,6 +550,13 @@ export function AnalyticsPageClient({
       {badgeQrModal}
       {viewerSnapshot !== null && viewerIndex !== null && (
         <GrowthMachineBoardViewer
+          // Forces a full remount on every prev/next-table click — without
+          // this, GrowthMachineBoardViewer's internal tldraw store/editor/
+          // thumbnails (all seeded once via a `useState(() => ...)` lazy
+          // initializer) never re-run when `snapshot` changes on the same
+          // instance, so the arrows updated the heading (tableName, a
+          // plain prop) but never the board content itself.
+          key={growthMachineBoards[viewerIndex]?.boardId ?? viewerIndex}
           snapshot={viewerSnapshot}
           tableName={growthMachineBoards[viewerIndex]?.tableName}
           onClose={() => {

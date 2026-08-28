@@ -9,6 +9,7 @@ import {
   createTLStore,
   loadSnapshot,
   renderPlaintextFromRichText,
+  Box,
   type Editor,
   type TLComponents,
   type TLPageId,
@@ -192,14 +193,40 @@ const HEADING_BOUNDS = { x: -350, y: -260, w: 700, h: 110 }
 // The locked "complete this sentence" text sits directly below the heading,
 // same horizontal span.
 const COMPLETION_BOUNDS = { x: -350, y: -140, w: 700, h: 70 }
-// Union of the two above — what the camera actually frames, so both the
-// heading and the completion starter are in view together.
-const FRAME_BOUNDS = {
+// The fixed square every prompt page works within and every thumbnail gets
+// cropped to — same width as the heading/completion shapes, and the same
+// height as that width (so it's an actual square), starting at the
+// heading's top edge. That leaves HEADING_BOUNDS.w minus the heading+
+// completion's combined 190px of height (510px) for the Builder to
+// actually draw in, below COMPLETION_BOUNDS — see DRAW_BOUNDS.
+//
+// Both thumbnail-export call sites (BuilderFlow's enterReview, and
+// GrowthMachineBoardViewer) pass this as an explicit `bounds` to
+// toImage() rather than letting tldraw compute a bounding box from
+// whatever shapes happen to be on the page — that's what was producing
+// inconsistently shaped/proportioned thumbnails when all 5 prompts were
+// pulled into one grid (a wide sticky-note spread on one page next to a
+// near-empty square on another). An explicit, identical `bounds` on every
+// export means every thumbnail is the same square, cropped to the same
+// page-space region, regardless of what was actually drawn or where —
+// including the heading/completion text, matching how thumbnails already
+// looked before this change.
+const SQUARE_BOUNDS = { x: HEADING_BOUNDS.x, y: HEADING_BOUNDS.y, w: HEADING_BOUNDS.w, h: HEADING_BOUNDS.w }
+// The drawable portion of SQUARE_BOUNDS — everything below the completion
+// starter, same horizontal span. Rendered as a visible dashed guide (see
+// the 'draw-boundary' shape below) so the Builder can see where their
+// drawing will actually end up inside the exported square; toImage()'s
+// `bounds: SQUARE_BOUNDS` is what actually enforces the crop, not this
+// guide's presence.
+const DRAW_BOUNDS = {
   x: HEADING_BOUNDS.x,
-  y: HEADING_BOUNDS.y,
+  y: COMPLETION_BOUNDS.y + COMPLETION_BOUNDS.h,
   w: HEADING_BOUNDS.w,
-  h: COMPLETION_BOUNDS.y + COMPLETION_BOUNDS.h - HEADING_BOUNDS.y,
+  h: SQUARE_BOUNDS.y + SQUARE_BOUNDS.h - (COMPLETION_BOUNDS.y + COMPLETION_BOUNDS.h),
 }
+// What the camera frames on page load — the whole square, so the Builder
+// sees heading + completion + the full drawable area together immediately.
+const FRAME_BOUNDS = SQUARE_BOUNDS
 
 /**
  * Builder-only flow: 5 tldraw pages, one per prompt (see PROMPT_HEADINGS). A
@@ -339,6 +366,27 @@ function BuilderFlow({
             richText: toRichText(PROMPT_HEADINGS[i]),
           });
 
+          // Visual guide for the fixed square every prompt's thumbnail gets
+          // cropped to (see DRAW_BOUNDS) — dashed/grey rather than the
+          // heading's solid black so it reads as "draw inside this," not
+          // as content of its own. Purely a guide: toImage()'s explicit
+          // `bounds` is what actually enforces the uniform export shape,
+          // not this shape's presence — a Builder drawing outside it just
+          // gets that overflow cropped out of their thumbnail.
+          reconcile(pageId, 'draw-boundary', 'geo', DRAW_BOUNDS.x, DRAW_BOUNDS.y, {
+            geo: 'rectangle',
+            w: DRAW_BOUNDS.w,
+            h: DRAW_BOUNDS.h,
+            dash: 'dashed',
+            fill: 'none',
+            color: 'grey',
+            size: 's',
+            font: 'serif',
+            align: 'middle',
+            verticalAlign: 'middle',
+            richText: toRichText(''),
+          });
+
           reconcile(pageId, 'completion', 'text', COMPLETION_BOUNDS.x, COMPLETION_BOUNDS.y, {
             color: 'black',
             // 'l' on a standalone text shape renders noticeably bigger than
@@ -427,7 +475,15 @@ function BuilderFlow({
           submitGrowthMachinePrompt(roomId, MACHINE_PARTS[i], extractPageText(editor, id)).catch(() => {});
         }
         if (!hasDrawing) return [id, null] as const;
-        const result = await editor.toImage(shapeIds, { format: 'png', background: true });
+        // Explicit bounds (not tldraw's default auto-fit-to-shapes) — see
+        // SQUARE_BOUNDS — so every prompt's thumbnail is the same square
+        // regardless of what was actually drawn or where.
+        const result = await editor.toImage(shapeIds, {
+          format: 'png',
+          background: true,
+          bounds: new Box(SQUARE_BOUNDS.x, SQUARE_BOUNDS.y, SQUARE_BOUNDS.w, SQUARE_BOUNDS.h),
+          padding: 0,
+        });
         return [id, result ? URL.createObjectURL(result.blob) : null] as const;
       })
     );
@@ -1165,7 +1221,16 @@ export function GrowthMachineBoardViewer({
           const shapeIds = [...editor.getPageShapeIds(id)];
           const hasDrawing = shapeIds.some((sid) => !editor.getShape(sid)?.isLocked);
           if (!hasDrawing) return [id, null] as const;
-          const result = await editor.toImage(shapeIds, { format: 'png', background: true });
+          // Same explicit SQUARE_BOUNDS crop as BuilderFlow's enterReview —
+          // keeps a submission viewed here consistent with how it looked in
+          // review/the grid at submission time, not re-fit to whatever this
+          // page's shapes happen to bound.
+          const result = await editor.toImage(shapeIds, {
+            format: 'png',
+            background: true,
+            bounds: new Box(SQUARE_BOUNDS.x, SQUARE_BOUNDS.y, SQUARE_BOUNDS.w, SQUARE_BOUNDS.h),
+            padding: 0,
+          });
           return [id, result ? URL.createObjectURL(result.blob) : null] as const;
         })
       );
