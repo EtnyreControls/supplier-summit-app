@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "main-app", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "sync-server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "sync-server", "run", "dev"],
+      "port": 8787
     }
   ]
 }

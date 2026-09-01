@@ -56,6 +56,21 @@ export default async function PollsPage() {
     ]);
   const voteCountRows = (voteCounts ?? []) as VoteCountRow[];
 
+  // Own table name per event, so the "Best Table" poll can exclude it from
+  // its options below — voting for your own table isn't the point of that
+  // poll. Keyed by event_id since table membership is scoped per event.
+  const myTableNameByEvent = new Map<string, string>();
+  if (user) {
+    const { data: myTableRows } = await supabase
+      .from("event_table_members")
+      .select("event_tables(table_name, event_id)")
+      .eq("user_id", user.id)
+      .returns<{ event_tables: { table_name: string; event_id: string } | null }[]>();
+    for (const row of myTableRows ?? []) {
+      if (row.event_tables) myTableNameByEvent.set(row.event_tables.event_id, row.event_tables.table_name);
+    }
+  }
+
   let myAnswers: { feedback_question_id: string; answer_value: string }[] = [];
   if (user) {
     const { data: myResponses } = await supabase
@@ -112,7 +127,11 @@ export default async function PollsPage() {
               myAnswer: myAnswerByQuestion.get(q.feedback_question_id) ?? null,
             };
           }
-          const optionLabels = (q.options ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+          let optionLabels = (q.options ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+          if (feedback.feedback_name === "Best Table") {
+            const myTable = myTableNameByEvent.get(feedback.event_id!);
+            if (myTable) optionLabels = optionLabels.filter((label) => label !== myTable);
+          }
           const tally = votesByQuestion.get(q.feedback_question_id);
           return {
             id: q.feedback_question_id,

@@ -17,6 +17,7 @@ interface BusinessUnit {
   name: string;
   hexImage: string; // placeholder: road image, swap per-brand later
   members: number;
+  funFact: string;
   brands: Brand[];
 }
 
@@ -26,6 +27,7 @@ const BUSINESS_UNITS: BusinessUnit[] = [
     name: 'Road Maintenance & Transportation',
     hexImage: '/Unit_1.png',
     members: 550,
+    funFact: 'Building equipment since 1898—five years before the windshield wiper was patented!',
     brands: [
       { name: 'E.D. Etnyre & Co.', logo: '/etnyre-logo.png', href: 'https://etnyre.com/' },
       { name: 'BearCat Manufacturing', logo: '/bearcat-logo.png', href: 'https://bearcatmfg.com/' },
@@ -36,6 +38,7 @@ const BUSINESS_UNITS: BusinessUnit[] = [
     name: 'Heavy Metal Fabrication',
     hexImage: '/Unit_2.png',
     members: 310,
+    funFact: 'Grew from one facility to four football fields of manufacturing space since 1972!',
     brands: [{ name: 'SMF', logo: '/smf-logo.png', href: '#' }],
   },
   {
@@ -43,6 +46,7 @@ const BUSINESS_UNITS: BusinessUnit[] = [
     name: 'Perforated Metal & Screen Solutions',
     hexImage: '/Unit_3.png',
     members: 190,
+    funFact: 'Pioneered commercial perforated metal in 1876!',
     brands: [
       { name: 'Hendrick Manufacturing', logo: '/hendrick-logo.png', href: 'https://www.hendrickcorp.com/' },
     ],
@@ -75,8 +79,21 @@ function UnitCardFace({
       <Typography sx={{ color: 'var(--color-ink)', fontSize: 32, fontWeight: 700, lineHeight: 1 }}>
         {unit.members}
       </Typography>
-      <Typography sx={{ color: 'var(--color-ink)', fontSize: 13, mb: showBrands ? 1 : 0 }}>
+      <Typography sx={{ color: 'var(--color-ink)', fontSize: 13, mb: 1 }}>
         members
+      </Typography>
+
+      <Typography
+        sx={{
+          color: 'var(--color-ink)',
+          fontSize: 11.5,
+          textAlign: 'center',
+          lineHeight: 1.35,
+          px: 1,
+          mb: showBrands ? 1 : 0,
+        }}
+      >
+        {unit.funFact}
       </Typography>
 
       {showBrands && (

@@ -224,9 +224,17 @@ const DRAW_BOUNDS = {
   w: HEADING_BOUNDS.w,
   h: SQUARE_BOUNDS.y + SQUARE_BOUNDS.h - (COMPLETION_BOUNDS.y + COMPLETION_BOUNDS.h),
 }
-// What the camera frames on page load — the whole square, so the Builder
-// sees heading + completion + the full drawable area together immediately.
-const FRAME_BOUNDS = SQUARE_BOUNDS
+// What the camera frames on page load. Padded above SQUARE_BOUNDS so the
+// heading/completion/drawable area sit lower in the viewport, clear of the
+// fixed prompt nav bar + hint box overlaid on top of the canvas — exports
+// still crop to SQUARE_BOUNDS itself, unaffected by this framing margin.
+const FRAME_TOP_MARGIN = 120
+const FRAME_BOUNDS = {
+  x: SQUARE_BOUNDS.x,
+  y: SQUARE_BOUNDS.y - FRAME_TOP_MARGIN,
+  w: SQUARE_BOUNDS.w,
+  h: SQUARE_BOUNDS.h + FRAME_TOP_MARGIN,
+}
 
 /**
  * Builder-only flow: 5 tldraw pages, one per prompt (see PROMPT_HEADINGS). A
@@ -750,6 +758,7 @@ function SpectatorPromptNav({ editor }: { editor: Editor }) {
         </IconButton>
       </div>
       <PromptHintBox index={index} />
+      <FollowBuilderToggle editor={editor} />
     </div>
   );
 }
@@ -798,28 +807,29 @@ function FollowBuilderToggle({ editor }: { editor: Editor }) {
 
   if (!builderUserId) return null;
 
+  // No fixed positioning of its own — rendered as the last item in
+  // SpectatorPromptNav's flex column, directly below PromptHintBox, so it
+  // sits below the hint regardless of the hint's collapsed/expanded height.
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-[400] flex justify-center" style={{ top: 116 }}>
-      <Button
-        variant="contained"
-        size="small"
-        className="pointer-events-auto"
-        onClick={() => {
-          if (isFollowing) {
-            editor.stopFollowingUser();
-          } else {
-            editor.startFollowingUser(builderUserId);
-          }
-        }}
-        sx={{
-          bgcolor: isFollowing ? '#fff' : '#000',
-          color: isFollowing ? '#000' : '#fff',
-          '&:hover': { bgcolor: isFollowing ? '#fff' : '#000' },
-        }}
-      >
-        {isFollowing ? 'Following builder' : 'Follow builder'}
-      </Button>
-    </div>
+    <Button
+      variant="contained"
+      size="small"
+      className="pointer-events-auto"
+      onClick={() => {
+        if (isFollowing) {
+          editor.stopFollowingUser();
+        } else {
+          editor.startFollowingUser(builderUserId);
+        }
+      }}
+      sx={{
+        bgcolor: isFollowing ? '#fff' : '#000',
+        color: isFollowing ? '#000' : '#fff',
+        '&:hover': { bgcolor: isFollowing ? '#fff' : '#000' },
+      }}
+    >
+      {isFollowing ? 'Following builder' : 'Follow builder'}
+    </Button>
   );
 }
 
@@ -1174,7 +1184,6 @@ function GrowthMachineCanvas({
         <BuilderFlow editor={editor} roomId={roomId} builderStatus={resolvedBuilderStatus} />
       )}
       {readOnly && editor && <SpectatorPromptNav editor={editor} />}
-      {readOnly && editor && <FollowBuilderToggle editor={editor} />}
       {readOnly && editor && <SpectatorBuilderStatusWatcher editor={editor} roomId={roomId} />}
     </div>
   );

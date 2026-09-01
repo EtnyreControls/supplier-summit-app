@@ -51,32 +51,48 @@ export function SessionCard({
   );
 }
 
-/** Speaker card with bio shown up front (no click needed to read it). */
+/** Speaker card: name, role, avatar. With `expandable`, tap reveals the bio
+ * (used by the agenda's "All speakers" list only — session-detail cards stay
+ * plain, no bio). */
 export function SpeakerCard({
   name,
   role,
   initials,
   bio,
   photoUrl,
+  expandable = false,
 }: {
   name: string;
   role: string;
   initials: string;
   bio?: string;
   photoUrl?: string;
+  expandable?: boolean;
 }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const canExpand = expandable && !!bio;
+
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-3">
-        <Avatar src={photoUrl} sx={{ width: 46, height: 46 }}>
-          {initials}
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold text-ink">{name}</p>
-          <p className="truncate text-[13px] text-grey-600">{role}</p>
+    <Card className="p-0">
+      <CardActionArea
+        onClick={() => canExpand && setExpanded((e) => !e)}
+        disabled={!canExpand}
+        className="p-4"
+        aria-expanded={canExpand ? expanded : undefined}
+      >
+        <div className="flex items-center gap-3">
+          <Avatar src={photoUrl} sx={{ width: 46, height: 46 }}>
+            {initials}
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold text-ink">{name}</p>
+            <p className="truncate text-[13px] text-grey-600">{role}</p>
+          </div>
         </div>
-      </div>
-      {bio && <p className="mt-3 text-[13px] leading-relaxed text-grey-700">{bio}</p>}
+        {canExpand && expanded && (
+          <p className="mt-3 whitespace-pre-line text-[13px] leading-relaxed text-grey-700">{bio}</p>
+        )}
+      </CardActionArea>
     </Card>
   );
 }

@@ -206,7 +206,7 @@ export function AgendaPageClient({
             <SectionHeader eyebrow="Meet the lineup" title="All speakers" />
             <div id="all-speakers" className="scroll-mt-24 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {speakers.map((sp) => (
-                <SpeakerCard key={sp.id} {...sp} />
+                <SpeakerCard key={sp.id} {...sp} expandable />
               ))}
             </div>
           </>

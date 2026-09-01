@@ -93,6 +93,15 @@ export class TldrawDurableObject extends DurableObject {
   async handleConnect(request: IRequest) {
     const sessionId = request.query.sessionId as string;
     if (!sessionId) return error(400, "Missing sessionId");
+    // Set by main-app's useSync `uri` (?readOnly=true for Spectators) — see
+    // TldrawDurableObject.ts's own handleSocketConnect docs: without this,
+    // every peer connects with write access (isReadonly defaults false),
+    // which is what previously forced main-app's GrowthMachineCanvas to
+    // fight the sync layer's own reactor client-side (re-asserting
+    // instanceState.isReadonly after every change) — a losing, looping
+    // battle against a server that kept reporting "readwrite" regardless.
+    // Reporting the real value here removes the need for that fight.
+    const isReadonly = request.query.readOnly === "true";
 
     const { 0: clientWebSocket, 1: serverWebSocket } = new WebSocketPair();
     // Use hibernation API instead of serverWebSocket.accept().
@@ -105,7 +114,7 @@ export class TldrawDurableObject extends DurableObject {
 
     // Connect to the room. The first webSocketMessage from the client will
     // complete the handshake and trigger debounced snapshot storage.
-    this.getOrCreateRoom().handleSocketConnect({ sessionId, socket: serverWebSocket });
+    this.getOrCreateRoom().handleSocketConnect({ sessionId, socket: serverWebSocket, isReadonly });
 
     return new Response(null, { status: 101, webSocket: clientWebSocket });
   }
