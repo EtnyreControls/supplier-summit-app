@@ -35,7 +35,7 @@ import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownR
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined'
 import Collapse from '@mui/material/Collapse'
 import { useRouter } from 'next/navigation'
-import { submitGrowthMachineBoard, submitGrowthMachinePrompt, type MachinePart } from '@/lib/supabase/growth-machine'
+import { enterGrowthMachine, submitGrowthMachineBoard, submitGrowthMachinePrompt, type MachinePart } from '@/lib/supabase/growth-machine'
 import { getLatestGrowthMachineBoardForTable } from '@/lib/supabase/get-growth-machine-board'
 import { AsphaltDistributorLoader } from './asphalt-distributor-loader'
 
@@ -462,8 +462,14 @@ function BuilderFlow({
     editor.zoomToBounds(FRAME_BOUNDS, { inset: 200, targetZoom: 1 });
   };
 
-  const enterReview = async () => {
-    setCameFromReview(false);
+  // Rasterizes each prompt page's current shapes into the review grid's
+  // thumbnails. Pulled out of enterReview so "View or edit submission" (a
+  // fresh mount reconnecting to an already-submitted room — thumbnails
+  // starts empty there, nothing has been drawn *this session*) can also
+  // populate real thumbnails from the room's actual content before showing
+  // review, instead of review rendering "Nothing drawn yet" for every
+  // prompt and looking like the submission was wiped.
+  const generateThumbnails = async () => {
     setGenerating(true);
     // toImage() rasterizes synchronously — if the heading/completion shapes'
     // custom serif webfont hasn't finished loading yet, their text renders
@@ -502,6 +508,12 @@ function BuilderFlow({
     }
     setThumbnails(next);
     setGenerating(false);
+    return entries;
+  };
+
+  const enterReview = async () => {
+    setCameFromReview(false);
+    const entries = await generateThumbnails();
 
     // All 5 prompts have a drawing — auto-finalize the board instead of
     // making the Builder land on review and click Submit themselves.
@@ -543,8 +555,22 @@ function BuilderFlow({
         <p className="mt-1 text-center text-sm text-grey-600">
           Your table&apos;s board is saved — thanks for building!
         </p>
-        <Button className="mt-5" variant="outlined" color="secondary" onClick={() => setMode('review')}>
-          View or edit submission
+        <Button
+          className="mt-5"
+          variant="outlined"
+          color="secondary"
+          disabled={generating}
+          onClick={async () => {
+            // Regenerate real thumbnails from the room's actual shapes
+            // first — on a fresh mount (reached via "Edit board" from
+            // /growth-machine) thumbnails is still empty, and jumping
+            // straight to review would render every prompt as "Nothing
+            // drawn yet" even though the submitted drawing is still there.
+            await generateThumbnails();
+            setMode('review');
+          }}
+        >
+          {generating ? 'Loading…' : 'View or edit submission'}
         </Button>
       </div>
     );
@@ -1373,7 +1399,19 @@ export function GrowthMachineBoardViewer({
           {editHref && (
             <Button
               variant="contained"
-              onClick={() => router.push(editHref)}
+              onClick={async () => {
+                // The route itself only reads role=builder from the URL to
+                // decide whether to render editably — it never re-claims the
+                // DB's is_builder flag. Without this, submit_growth_machine_
+                // board() later rejects the resubmission with "Only the
+                // table's current builder can submit its board" (is_builder
+                // may have been released by an intervening Spectator visit),
+                // which looked like the Submit button hanging forever since
+                // that error only ever surfaces once submitBoard() finally
+                // resolves.
+                await enterGrowthMachine(true).catch(() => null)
+                router.push(editHref)
+              }}
               sx={{ bgcolor: '#000', color: '#fff' }}
             >
               Edit board

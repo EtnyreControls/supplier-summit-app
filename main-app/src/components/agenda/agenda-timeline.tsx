@@ -83,9 +83,7 @@ export function AgendaTimeline({
                       />
                     )}
                   </div>
-                  <p className="mt-0.5 truncate text-[13px] text-grey-600">
-                    {s.time} · {s.location}
-                  </p>
+                  <p className="mt-0.5 truncate text-[13px] text-grey-600">{s.time}</p>
                 </button>
                 {expanded && <div className="mt-2">{renderExpanded(s)}</div>}
               </div>

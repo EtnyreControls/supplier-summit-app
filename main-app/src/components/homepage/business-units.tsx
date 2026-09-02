@@ -39,7 +39,7 @@ const BUSINESS_UNITS: BusinessUnit[] = [
     hexImage: '/Unit_2.png',
     members: 310,
     funFact: 'Grew from one facility to four football fields of manufacturing space since 1972!',
-    brands: [{ name: 'SMF', logo: '/smf-logo.png', href: '#' }],
+    brands: [{ name: 'SMF', logo: '/smf-logo.png', href: 'https://smf-inc.com/' }],
   },
   {
     id: 'perforated-metal',

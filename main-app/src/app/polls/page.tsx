@@ -71,6 +71,14 @@ export default async function PollsPage() {
     }
   }
 
+  // table_name ("1".."12", what the "Best Table" poll's options/votes are
+  // actually keyed on) -> table_label (friendly name, 'TBD' until set) — the
+  // poll displays "label (name)" for each option, kept separate from the id
+  // so existing votes/tallies keyed on table_name stay valid even after
+  // labels are renamed.
+  const { data: tableRows } = await supabase.from("event_tables").select("table_name, table_label");
+  const tableLabelByName = new Map((tableRows ?? []).map((t) => [t.table_name, t.table_label as string]));
+
   let myAnswers: { feedback_question_id: string; answer_value: string }[] = [];
   if (user) {
     const { data: myResponses } = await supabase
@@ -127,20 +135,25 @@ export default async function PollsPage() {
               myAnswer: myAnswerByQuestion.get(q.feedback_question_id) ?? null,
             };
           }
-          let optionLabels = (q.options ?? "").split(",").map((o) => o.trim()).filter(Boolean);
-          if (feedback.feedback_name === "Best Table") {
+          const isBestTable = feedback.feedback_name === "Best Table";
+          // Best Table's options are event_tables.table_name ("1".."12") —
+          // what votes/tallies/"own table" exclusion are keyed on. Displayed
+          // as "label (name)" via tableLabelByName; every other mcq/rating
+          // question's options are already literal, human-readable labels.
+          let optionIds = (q.options ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+          if (isBestTable) {
             const myTable = myTableNameByEvent.get(feedback.event_id!);
-            if (myTable) optionLabels = optionLabels.filter((label) => label !== myTable);
+            if (myTable) optionIds = optionIds.filter((id) => id !== myTable);
           }
           const tally = votesByQuestion.get(q.feedback_question_id);
           return {
             id: q.feedback_question_id,
             question: q.question_text,
             kind: "choice" as const,
-            options: optionLabels.map((label) => ({
-              id: label,
-              label,
-              votes: tally?.get(label) ?? 0,
+            options: optionIds.map((id) => ({
+              id,
+              label: isBestTable ? `${tableLabelByName.get(id) ?? id} (${id})` : id,
+              votes: tally?.get(id) ?? 0,
             })),
             myAnswer: myAnswerByQuestion.get(q.feedback_question_id) ?? null,
           };

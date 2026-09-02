@@ -4,7 +4,6 @@ import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
-import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import { SpeakerCard } from "@/components/cards";
 import type { AgendaSession } from "./agenda-timeline";
@@ -39,9 +38,6 @@ export function SessionDetail({
       <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-grey-600">
         <span className="inline-flex items-center gap-1">
           <ScheduleRoundedIcon sx={{ fontSize: 16 }} /> {session.time}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <PlaceRoundedIcon sx={{ fontSize: 16 }} /> {session.location}
         </span>
       </div>
 

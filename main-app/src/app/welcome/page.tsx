@@ -10,7 +10,11 @@ import { WelcomePageClient } from "./welcome-page-client";
  * to the client for the timer/animation and the redirect into Event Info.
  */
 
-type MembershipRow = { event_tables: { table_name: string | null } | null };
+type MembershipRow = { event_tables: { table_name: string | null; table_label: string | null } | null };
+// Placeholder value every table starts with (see
+// 20260901140000_add_table_label.sql) — not a real name yet, so treated the
+// same as no label.
+const UNNAMED_TABLE_LABEL = "TBD";
 
 export default async function WelcomePage() {
   const supabase = await createClient();
@@ -28,14 +32,16 @@ export default async function WelcomePage() {
 
   const { data: membership } = await supabase
     .from("event_table_members")
-    .select("event_tables(table_name)")
+    .select("event_tables(table_name, table_label)")
     .eq("user_id", authUser.id)
     .limit(1)
     .maybeSingle<MembershipRow>();
 
   const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || "Attendee";
   const company = profile?.company ?? "";
-  const tableNumber = membership?.event_tables?.table_name ?? "TBD";
+  const tableNumber = membership?.event_tables?.table_name ?? null;
+  const rawLabel = membership?.event_tables?.table_label ?? null;
+  const tableLabel = rawLabel && rawLabel !== UNNAMED_TABLE_LABEL ? rawLabel : null;
 
-  return <WelcomePageClient name={name} company={company} tableNumber={tableNumber} />;
+  return <WelcomePageClient name={name} company={company} tableNumber={tableNumber} tableLabel={tableLabel} />;
 }

@@ -6,6 +6,7 @@ import Chip from "@mui/material/Chip";
 import Avatar from "@mui/material/Avatar";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
+import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 
 /** Agenda session. `live` renders the amber "Live now" chip (distinct from
  * primary yellow, so it doesn't compete with actual call-to-action buttons).
@@ -88,7 +89,23 @@ export function SpeakerCard({
             <p className="truncate text-[15px] font-semibold text-ink">{name}</p>
             <p className="truncate text-[13px] text-grey-600">{role}</p>
           </div>
+          {canExpand && (
+            <KeyboardArrowDownRoundedIcon
+              sx={{
+                fontSize: 20,
+                color: "var(--color-grey-500)",
+                flexShrink: 0,
+                transition: "transform 0.15s",
+                transform: expanded ? "rotate(180deg)" : "none",
+              }}
+            />
+          )}
         </div>
+        {canExpand && !expanded && (
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-grey-500">
+            Tap to expand for details
+          </p>
+        )}
         {canExpand && expanded && (
           <p className="mt-3 whitespace-pre-line text-[13px] leading-relaxed text-grey-700">{bio}</p>
         )}

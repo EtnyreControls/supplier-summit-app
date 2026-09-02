@@ -26,12 +26,19 @@ export function WelcomeReveal({
   name,
   company,
   tableNumber,
+  tableLabel,
   durationMs = 5000,
   onComplete,
 }: {
   name: string;
   company: string;
-  tableNumber: string | number;
+  // null when the attendee has no table assignment — the Table block below
+  // is skipped entirely rather than showing a placeholder like "TBD".
+  tableNumber: string | number | null;
+  // Real table name, once tables are named (null while still 'TBD' — see
+  // welcome/page.tsx). Shown as the headline once set, with the plain
+  // number underneath; falls back to just the number when null.
+  tableLabel?: string | null;
   /** Total time on screen before onComplete fires. Ignored (shortened) under reduced motion. */
   durationMs?: number;
   onComplete: () => void;
@@ -72,7 +79,13 @@ export function WelcomeReveal({
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
       role="status"
-      aria-label={`Welcome, ${name}, from ${company}. Table ${tableNumber}.`}
+      aria-label={
+        tableNumber == null
+          ? `Welcome, ${name}, from ${company}.`
+          : tableLabel
+            ? `Welcome, ${name}, from ${company}. Table ${tableNumber}, ${tableLabel}.`
+            : `Welcome, ${name}, from ${company}. Table ${tableNumber}.`
+      }
     >
       <p
         className={`text-[11px] font-semibold uppercase tracking-[0.16em] text-grey-500 ${
@@ -117,15 +130,24 @@ export function WelcomeReveal({
         {company}
       </p>
 
-      <div
-        className={`mt-8 border-t border-grey-200 pt-5 ${reducedMotion ? "" : "animate-summit-fade"}`}
-        style={reducedMotion ? undefined : { animationDelay: "2.8s" }}
-      >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-grey-500">
-          Table
-        </p>
-        <p className="mt-1 text-xl font-medium text-ink">{tableNumber}</p>
-      </div>
+      {tableNumber != null && (
+        <div
+          className={`mt-8 border-t border-grey-200 pt-5 ${reducedMotion ? "" : "animate-summit-fade"}`}
+          style={reducedMotion ? undefined : { animationDelay: "2.8s" }}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-grey-500">
+            Table
+          </p>
+          {tableLabel ? (
+            <>
+              <p className="mt-1 text-xl font-medium text-ink">{tableLabel}</p>
+              <p className="mt-0.5 text-xs text-grey-500">Table {tableNumber}</p>
+            </>
+          ) : (
+            <p className="mt-1 text-xl font-medium text-ink">{tableNumber}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
